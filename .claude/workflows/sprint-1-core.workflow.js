@@ -133,4 +133,5 @@ await parallel([
   ),
 ]);
 
-log('Sprint 1 完成 — 认证、课程、路径引擎、JSON导入全部就绪');
+log('Sprint 1 完成。自动启动 Sprint 2...');
+await workflow('sprint-2-ui-review');

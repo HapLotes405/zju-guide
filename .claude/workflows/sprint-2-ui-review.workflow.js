@@ -124,3 +124,41 @@ await agent(
 );
 
 log('Sprint 2 完成 — 前端页面、投稿审核、前后端联调通过');
+
+log('进入最终阶段：Docker 部署 + 安全审计 + E2E + 答辩准备...');
+
+phase('部署 & 打磨');
+
+await parallel([
+  () => agent(
+    `Docker 部署验收：
+    1. docker compose -f docker/docker-compose.yml up -d
+    2. 验证 http://localhost:3000 可访问
+    3. 备份恢复演练`,
+    { label: 'deploy', phase: '部署 & 打磨', model: 'sonnet' }
+  ),
+  () => agent(
+    `安全审计：
+    1. 检查 .env 不在 Git 中
+    2. 日志中无敏感信息
+    3. 密码使用 bcrypt
+    4. 管理员 API 受保护`,
+    { label: 'security', phase: '部署 & 打磨', model: 'sonnet' }
+  ),
+  () => agent(
+    `E2E 测试：
+    1. 创建 Playwright 测试覆盖主流程
+    2. 创建 API 集成测试
+    3. 运行 pnpm test && pnpm test:e2e`,
+    { label: 'testing', phase: '部署 & 打磨', model: 'sonnet' }
+  ),
+  () => agent(
+    `答辩准备：
+    1. 编写 DEMO_SCRIPT.md 演示脚本
+    2. 预置演示数据（admin + visitor 账号，已审核资源）
+    3. 更新 README.md`,
+    { label: 'demo-prep', phase: '部署 & 打磨', model: 'sonnet' }
+  ),
+]);
+
+log('🎉 项目全部完成！可交付答辩。');

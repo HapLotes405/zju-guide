@@ -70,8 +70,10 @@ model User {
   programs      UserProgram[]
   imports       SourceImport[]
   courseRecords CourseRecord[]
-  submissions   Submission[]
-  reviews       Review[]
+  resources     Resource[]   @relation("ResourceSubmitter")
+  submittedSubmissions Submission[] @relation("SubmissionSubmitter")
+  reviewedSubmissions  Submission[] @relation("SubmissionReviewer")
+  authoredReviews      Review[]     @relation("ReviewReviewer")
   auditLogs     AuditLog[]
 
   @@index([username])
@@ -146,7 +148,6 @@ model ProgramVersion {
   userPrograms      UserProgram[]
   requirementGroups RequirementGroup[]
   programCourses    ProgramCourse[]
-  auditLogs         AuditLog[]
 
   @@index([majorName])
   @@index([year])
@@ -235,10 +236,9 @@ model Resource {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
-  submitter       User              @relation(fields: [submitterId], references: [id])
+  submitter       User              @relation("ResourceSubmitter", fields: [submitterId], references: [id])
   courseResources CourseResource[]
   submissions     Submission[]
-  auditLogs       AuditLog[]
 
   @@index([status])
   @@index([submitterId])
@@ -268,8 +268,9 @@ model Submission {
   reason      String?
 
   resource  Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
-  submitter User     @relation(fields: [submitterId], references: [id])
-  reviewer  User?    @relation(fields: [reviewerId], references: [id])
+  submitter User     @relation("SubmissionSubmitter", fields: [submitterId], references: [id])
+  reviewer  User?    @relation("SubmissionReviewer", fields: [reviewerId], references: [id])
+  reviews   Review[] @relation("SubmissionReviews")
 
   @@index([resourceId])
   @@index([result])
@@ -283,8 +284,8 @@ model Review {
   reason       String?
   reviewedAt   DateTime     @default(now())
 
-  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  reviewer   User       @relation(fields: [reviewerId], references: [id])
+  submission Submission @relation("SubmissionReviews", fields: [submissionId], references: [id], onDelete: Cascade)
+  reviewer   User       @relation("ReviewReviewer", fields: [reviewerId], references: [id])
 
   @@index([submissionId])
 }

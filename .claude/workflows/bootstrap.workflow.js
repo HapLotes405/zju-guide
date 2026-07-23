@@ -60,4 +60,5 @@ await agent(
   { label: 'verify', phase: '验证', model: 'sonnet' }
 );
 
-log('Phase 0 完成。可以开始 Sprint 1。');
+log('Phase 0 完成。自动启动 Sprint 1...');
+await workflow('sprint-1-core');
