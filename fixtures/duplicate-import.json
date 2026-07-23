@@ -1,0 +1,12 @@
+{
+  "_meta": {
+    "description": "脱敏教务JSON — 与valid-import.json部分重复，用于测试幂等导入",
+    "schemaVersion": "1.0"
+  },
+  "major": "材料科学与工程",
+  "year": 2025,
+  "courses": [
+    { "code": "MATH1135G", "name": "微积分(甲)I", "credits": 5.0, "semester": 1, "grade": "A" },
+    { "code": "PHY1001G", "name": "大学物理(甲)I", "credits": 4.0, "semester": 2, "grade": "A-" }
+  ]
+}

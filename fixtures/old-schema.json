@@ -1,0 +1,12 @@
+{
+  "_meta": {
+    "description": "脱敏教务JSON — 旧版schema格式，用于测试兼容性",
+    "schemaVersion": "0.5"
+  },
+  "program": "材料科学与工程",
+  "grade": 2025,
+  "records": [
+    { "courseId": "MATH1135G", "title": "微积分(甲)I", "credit": 5.0, "term": 1, "result": "优秀" },
+    { "courseId": "MATH1138G", "title": "线性代数(甲)", "credit": 2.5, "term": 1, "result": "良好" }
+  ]
+}

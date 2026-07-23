@@ -1,0 +1,12 @@
+{
+  "_meta": {
+    "description": "脱敏教务JSON — 缺少必填字段，用于测试校验错误处理",
+    "schemaVersion": "1.0"
+  },
+  "major": "材料科学与工程",
+  "year": 2025,
+  "courses": [
+    { "name": "微积分(甲)I", "semester": 1 },
+    { "code": "MATH1138G", "credits": 2.5 }
+  ]
+}

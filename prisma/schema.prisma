@@ -1,0 +1,308 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== 枚举 ====================
+
+enum Role {
+  VISITOR
+  CONTRIBUTOR
+  ADMIN
+}
+
+enum ProgramType {
+  MAJOR
+  MINOR
+}
+
+enum CourseStatus {
+  PASSED
+  ENROLLED
+  PLANNED
+}
+
+enum ResourceType {
+  EBOOK
+  LECTURE_NOTE
+  EXAM_RECALL
+  BLOG
+  CC98_POST
+  TOOL_TEMPLATE
+  OTHER
+}
+
+enum ResourceStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum CopyrightStatus {
+  PUBLIC_DOMAIN
+  AUTHORIZED
+  EXTERNAL_LINK
+  UNKNOWN
+}
+
+enum ReviewResult {
+  APPROVED
+  REJECTED
+  NEEDS_REVISION
+  MERGED
+}
+
+// ==================== 用户与认证 ====================
+
+model User {
+  id           String   @id @default(uuid())
+  username     String   @unique
+  passwordHash String
+  role         Role     @default(VISITOR)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  programs      UserProgram[]
+  imports       SourceImport[]
+  courseRecords CourseRecord[]
+  submissions   Submission[]
+  reviews       Review[]
+  auditLogs     AuditLog[]
+
+  @@index([username])
+  @@index([role])
+}
+
+// ==================== 用户专业 ====================
+
+model UserProgram {
+  id               String      @id @default(uuid())
+  userId           String
+  programVersionId String
+  type             ProgramType
+  isConfirmed      Boolean     @default(false)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  programVersion ProgramVersion @relation(fields: [programVersionId], references: [id])
+
+  @@unique([userId, programVersionId, type])
+  @@index([userId])
+  @@index([programVersionId])
+}
+
+// ==================== 导入记录 ====================
+
+model SourceImport {
+  id           String   @id @default(uuid())
+  userId       String
+  rawJson      Json
+  schemaVersion String
+  importedAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([importedAt])
+}
+
+// ==================== 修读记录 ====================
+
+model CourseRecord {
+  id         String       @id @default(uuid())
+  userId     String
+  courseCode String
+  status     CourseStatus
+  semester   Int?
+  source     String       // "IMPORT" | "MANUAL"
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseCode], references: [code])
+
+  @@unique([userId, courseCode])
+  @@index([userId])
+  @@index([courseCode])
+}
+
+// ==================== 培养方案 ====================
+
+model ProgramVersion {
+  id           String   @id @default(uuid())
+  majorName    String
+  year         Int      // 如 2025
+  totalCredits Float
+  isActive     Boolean  @default(true)
+  publishedAt  DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  userPrograms      UserProgram[]
+  requirementGroups RequirementGroup[]
+  programCourses    ProgramCourse[]
+  auditLogs         AuditLog[]
+
+  @@index([majorName])
+  @@index([year])
+  @@unique([majorName, year])
+}
+
+model RequirementGroup {
+  id               String  @id @default(uuid())
+  programVersionId String
+  name             String  // 如 "自然科学通识", "专业必修", "个性修读"
+  requiredCredits  Float
+  category         String  // "gen_ed" | "major_base" | "major_core" | "major_module" | "personalized"
+
+  programVersion ProgramVersion  @relation(fields: [programVersionId], references: [id], onDelete: Cascade)
+  programCourses ProgramCourse[]
+
+  @@index([programVersionId])
+}
+
+model ProgramCourse {
+  id                String  @id @default(uuid())
+  programVersionId  String
+  courseCode        String
+  suggestedSemester Int     // 1-10 (包含暑期)
+  isCompulsory      Boolean
+  requirementGroupId String?
+
+  programVersion   ProgramVersion   @relation(fields: [programVersionId], references: [id], onDelete: Cascade)
+  course           Course           @relation(fields: [courseCode], references: [code])
+  requirementGroup RequirementGroup? @relation(fields: [requirementGroupId], references: [id])
+
+  @@unique([programVersionId, courseCode])
+  @@index([programVersionId])
+  @@index([courseCode])
+}
+
+// ==================== 课程主数据 ====================
+
+model Course {
+  code        String   @id // 如 MATH1135G
+  name        String
+  credits     Float
+  department  String?
+  category    String?  // "nat_sci" | "major_base" | "major_core" | ...
+  description String?
+  semester    String?  // "大一上" 等文字描述
+
+  courseRecords CourseRecord[]
+  programCourses ProgramCourse[]
+  courseResources CourseResource[]
+
+  prerequisites CoursePrerequisite[] @relation("CourseAsTarget")
+  dependents    CoursePrerequisite[] @relation("CourseAsSource")
+
+  @@index([name])
+  @@index([department])
+}
+
+// 课程依赖关系
+model CoursePrerequisite {
+  id             String @id @default(uuid())
+  courseCode     String // 目标课程
+  prerequisiteCode String // 前置课程
+  relationType   String @default("PREREQUISITE") // PREREQUISITE | COREQUISITE | RECOMMENDED
+  reason         String? // 为什么存在这个依赖
+
+  course        Course @relation("CourseAsTarget", fields: [courseCode], references: [code], onDelete: Cascade)
+  prerequisite  Course @relation("CourseAsSource", fields: [prerequisiteCode], references: [code], onDelete: Cascade)
+
+  @@unique([courseCode, prerequisiteCode])
+  @@index([courseCode])
+}
+
+// ==================== 资源 & 审核 ====================
+
+model Resource {
+  id              String          @id @default(uuid())
+  title           String
+  type            ResourceType
+  url             String?
+  summary         String?
+  copyrightStatus CopyrightStatus @default(UNKNOWN)
+  applicableStage String?         // "BEFORE" | "DURING" | "FINAL" | "ALL"
+  status          ResourceStatus  @default(DRAFT)
+  submitterId     String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  submitter       User              @relation(fields: [submitterId], references: [id])
+  courseResources CourseResource[]
+  submissions     Submission[]
+  auditLogs       AuditLog[]
+
+  @@index([status])
+  @@index([submitterId])
+  @@index([type])
+}
+
+model CourseResource {
+  id         String @id @default(uuid())
+  resourceId String
+  courseCode String
+
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  course   Course   @relation(fields: [courseCode], references: [code], onDelete: Cascade)
+
+  @@unique([resourceId, courseCode])
+  @@index([courseCode])
+}
+
+model Submission {
+  id          String       @id @default(uuid())
+  resourceId  String
+  submitterId String
+  submittedAt DateTime     @default(now())
+  reviewedAt  DateTime?
+  reviewerId  String?
+  result      ReviewResult?
+  reason      String?
+
+  resource  Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  submitter User     @relation(fields: [submitterId], references: [id])
+  reviewer  User?    @relation(fields: [reviewerId], references: [id])
+
+  @@index([resourceId])
+  @@index([result])
+}
+
+model Review {
+  id           String       @id @default(uuid())
+  submissionId String
+  reviewerId   String
+  result       ReviewResult
+  reason       String?
+  reviewedAt   DateTime     @default(now())
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  reviewer   User       @relation(fields: [reviewerId], references: [id])
+
+  @@index([submissionId])
+}
+
+// ==================== 审计日志 ====================
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String
+  action     String   // "IMPORT_CONFIRMED" | "RESOURCE_APPROVED" | "RESOURCE_REJECTED" | "PROGRAM_VERSION_PUBLISHED" | "GRAPH_EDITED"
+  targetType String   // "SourceImport" | "Resource" | "ProgramVersion" | "CoursePrerequisite"
+  targetId   String
+  detail     String?  // 变更说明
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+}

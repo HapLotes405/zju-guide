@@ -1,0 +1,45 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: mse-wiki-app
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://msewiki:msewiki@db:5432/msewiki
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-production}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-dev-refresh-secret-change}
+      - NODE_ENV=development
+    volumes:
+      - ..:/app
+      - /app/node_modules
+      - /app/.next
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    container_name: mse-wiki-db
+    environment:
+      POSTGRES_USER: msewiki
+      POSTGRES_PASSWORD: msewiki
+      POSTGRES_DB: msewiki
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U msewiki -d msewiki"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pgdata:
