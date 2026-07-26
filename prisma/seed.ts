@@ -8,8 +8,8 @@ async function main() {
 
   // ==================== 1. Users ====================
 
-  const adminPass = process.env.SEED_ADMIN_PASSWORD || "CHANGE_ME";
-  const testPass = process.env.SEED_TEST_PASSWORD || "CHANGE_ME";
+  const adminPass = process.env.SEED_ADMIN_PASSWORD || "admin123";
+  const testPass = process.env.SEED_TEST_PASSWORD || "test123";
   const adminHash = bcrypt.hashSync(adminPass, 10);
   const userHash = bcrypt.hashSync(testPass, 10);
 
