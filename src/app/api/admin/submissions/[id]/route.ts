@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireRole, AuthError } from "@/lib/auth";
 
 // PATCH /api/admin/submissions/[id] — 审核操作（通过/驳回）
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  try {
   const { userId } = await requireRole(request, "ADMIN");
   const { id } = await params;
   const body = await request.json();
@@ -70,4 +71,8 @@ export async function PATCH(
   });
 
   return NextResponse.json({ data: { id: updated.id, result: updated.result } });
+  } catch (e) {
+    if (e instanceof AuthError) return NextResponse.json({ error: { code: e.code, message: e.message } }, { status: e.status });
+    return NextResponse.json({ error: { code: "INTERNAL_ERROR", message: "服务器内部错误" } }, { status: 500 });
+  }
 }

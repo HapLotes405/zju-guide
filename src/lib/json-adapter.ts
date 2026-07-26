@@ -142,7 +142,7 @@ const SENSITIVE_KEYS = new Set([
  * Deep-strip sensitive fields (学号, 身份证号, etc.) from an object.
  * Also removes any numeric `score` field that looks like a raw exam mark.
  */
-function stripSensitive(
+export function stripSensitive(
   obj: Record<string, unknown>,
 ): Record<string, unknown> {
   const cleaned: Record<string, unknown> = {};

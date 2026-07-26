@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, AuthError } from "@/lib/auth";
-import { normalize } from "@/lib/json-adapter";
+import { normalize, stripSensitive } from "@/lib/json-adapter";
 import type { NormalizedDocument } from "@/lib/json-adapter";
 import { Prisma } from "@prisma/client";
 
@@ -52,11 +52,17 @@ export async function POST(request: NextRequest) {
       "records" in (rawJson as Record<string, unknown>);
     const schemaVersion = hasOldShape ? "0.5" : "1.0";
 
-    // 4. Persist the raw import record.
+    // 4. Strip sensitive fields before persisting.
+    const safeJson =
+      rawJson !== null && typeof rawJson === "object" && !Array.isArray(rawJson)
+        ? stripSensitive(rawJson as Record<string, unknown>)
+        : rawJson;
+
+    // 5. Persist the sanitized import record.
     const importRecord = await prisma.sourceImport.create({
       data: {
         userId,
-        rawJson: rawJson as Prisma.InputJsonValue,
+        rawJson: safeJson as Prisma.InputJsonValue,
         schemaVersion,
       },
     });

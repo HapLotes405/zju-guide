@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireRole, AuthError } from "@/lib/auth";
 import { z } from "zod";
 
 // 培养方案 JSON 格式 — 发给队友郑轶的规范
@@ -115,12 +115,18 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ data: results }, { status: 201 });
   } catch (e) {
+    if (e instanceof AuthError) {
+      return NextResponse.json({ error: { code: e.code, message: e.message } }, { status: e.status });
+    }
     if (e instanceof z.ZodError) {
       return NextResponse.json(
         { error: { code: "VALIDATION_ERROR", message: "JSON格式错误", details: e.errors } },
         { status: 400 },
       );
     }
-    throw e;
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: "服务器内部错误" } },
+      { status: 500 },
+    );
   }
 }

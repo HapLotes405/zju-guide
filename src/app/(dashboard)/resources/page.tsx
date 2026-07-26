@@ -10,14 +10,13 @@ import { RESOURCE_TYPE_LABELS } from "@/lib/constants";
 export default function ResourcesPage() {
   const [search, setSearch] = useState("");
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<{ results: { type: string; title: string; url?: string; summary?: string }[] }>({
     queryKey: ["search", search],
-    queryFn: () =>
-      api.get<{ data: { type: string; title: string; url?: string; summary?: string }[] }>(
-        `/api/search?q=${encodeURIComponent(search)}`,
-      ),
+    queryFn: () => api.get(`/api/search?q=${encodeURIComponent(search)}`),
     enabled: search.length > 0,
   });
+
+  const results = data?.results ?? [];
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -39,16 +38,16 @@ export default function ResourcesPage() {
 
       {isLoading && <div className="text-center text-sm text-slate-400">搜索中...</div>}
 
-      {data && data.data.length === 0 && (
+      {data && results.length === 0 && (
         <div className="rounded-xl border-2 border-dashed border-slate-300 bg-white p-12 text-center">
           <Search className="mx-auto mb-4 h-10 w-10 text-slate-300" />
           <p className="text-sm text-slate-500">没有找到匹配的资料</p>
         </div>
       )}
 
-      {data && data.data.length > 0 && (
+      {data && results.length > 0 && (
         <div className="space-y-3">
-          {data.data.map((item, idx) => (
+          {results.map((item, idx) => (
             <div key={idx} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div>

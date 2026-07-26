@@ -6,32 +6,24 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ code: string }> },
 ) {
-  const { code } = await params;
+  try {
+    const { code } = await params;
 
-  const resources = await prisma.courseResource.findMany({
-    where: {
-      courseCode: code,
-      resource: { status: "APPROVED" },
-    },
-    include: {
-      resource: {
-        include: { submitter: { select: { username: true } } },
-      },
-    },
-    orderBy: { resource: { createdAt: "desc" } },
-  });
+    const resources = await prisma.courseResource.findMany({
+      where: { courseCode: code, resource: { status: "APPROVED" } },
+      include: { resource: { include: { submitter: { select: { username: true } } } } },
+      orderBy: { resource: { createdAt: "desc" } },
+    });
 
-  const data = resources.map((cr) => ({
-    id: cr.resource.id,
-    title: cr.resource.title,
-    type: cr.resource.type,
-    url: cr.resource.url,
-    summary: cr.resource.summary,
-    copyrightStatus: cr.resource.copyrightStatus,
-    applicableStage: cr.resource.applicableStage,
-    submitterName: cr.resource.submitter.username,
-    createdAt: cr.resource.createdAt.toISOString(),
-  }));
+    const data = resources.map((cr) => ({
+      id: cr.resource.id, title: cr.resource.title, type: cr.resource.type,
+      url: cr.resource.url, summary: cr.resource.summary,
+      copyrightStatus: cr.resource.copyrightStatus, applicableStage: cr.resource.applicableStage,
+      submitterName: cr.resource.submitter.username, createdAt: cr.resource.createdAt.toISOString(),
+    }));
 
-  return NextResponse.json({ data });
+    return NextResponse.json({ data });
+  } catch {
+    return NextResponse.json({ error: { code: "INTERNAL_ERROR", message: "服务器内部错误" } }, { status: 500 });
+  }
 }

@@ -43,7 +43,7 @@ export default function DashboardPage() {
   const [view, setView] = useState<"map" | "timeline">("map");
   const [hovered, setHovered] = useState<string | null>(null);
 
-  const { data: allCourses = [] } = useQuery<CourseData[]>({
+  const { data: allCourses = [], isLoading, isError } = useQuery<CourseData[]>({
     queryKey: ["all-courses"],
     queryFn: () => api.rawGet<{ data: CourseData[] }>("/api/courses?pageSize=500").then((d) => d.data ?? []),
   });
@@ -129,6 +129,14 @@ export default function DashboardPage() {
       </div>
 
       {/* ── 课程区域 ── */}
+      {isLoading && (
+        <div className="py-16 text-center text-sm text-slate-400">加载课程数据中...</div>
+      )}
+      {isError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">加载课程失败，请刷新重试</div>
+      )}
+      {!isLoading && !isError && (
+      <>
       {view === "map" ? (
         <div className="space-y-8">
           {GROUPS.map((g) => {
@@ -174,6 +182,8 @@ export default function DashboardPage() {
           })}
         </div>
       )}
+      </>
+      )}
     </div>
   );
 }
@@ -192,11 +202,12 @@ function Card({ c, passed, hl, onClick, onToggle, onEnter, onLeave }: {
     major_module: "border-emerald-200 bg-emerald-50/30 text-emerald-700",
     personalized: "border-violet-200 bg-violet-50/30 text-violet-700",
   };
-  const cc = catColors[c.category] ?? "border-slate-200 bg-white";
+  const catKey = c.category.startsWith("module_") ? "major_module" : c.category;
+  const cc = catColors[catKey] ?? "border-slate-200 bg-white";
 
   return (
     <div onClick={onClick} onMouseEnter={onEnter} onMouseLeave={onLeave}
-      className={`group cursor-pointer rounded-xl border bg-white p-3 transition-all duration-150 hover:shadow-md ${passed ? "ring-1 ring-emerald-300" : ""} ${hl ? "opacity-100" : "opacity-40"}`}>
+      className={`group relative cursor-pointer rounded-xl border bg-white p-3 transition-all duration-150 hover:shadow-md ${passed ? "ring-1 ring-emerald-300" : ""} ${hl ? "opacity-100" : "opacity-40"}`}>
       <div className="mb-1.5 flex items-start justify-between gap-2">
         <h5 className="truncate text-xs font-semibold text-slate-800" title={c.name}>{c.name}</h5>
         <button onClick={(e) => { e.stopPropagation(); onToggle(); }}

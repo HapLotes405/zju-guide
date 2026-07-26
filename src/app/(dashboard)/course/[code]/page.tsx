@@ -878,7 +878,7 @@ export default function CourseDetailPage() {
 
 // ─── 资源区子组件 ──────────────────────────────
 function ResourceSection({ courseCode, courseName }: { courseCode: string; courseName: string }) {
-  const { data: resources = [], isLoading } = useQuery({
+  const { data: resources = [], isLoading, isError } = useQuery({
     queryKey: ["course-resources", courseCode],
     queryFn: () =>
       api.get<{ id: string; title: string; type: string; url: string | null; summary: string | null; applicableStage: string | null; submitterName: string }[]>(
@@ -908,7 +908,9 @@ function ResourceSection({ courseCode, courseName }: { courseCode: string; cours
       {/* Approved resources */}
       {isLoading && <div className="py-4 text-center text-sm text-slate-400">加载中...</div>}
 
-      {!isLoading && resources.length === 0 && (
+      {isError && <div className="py-4 text-center text-sm text-red-500">资源加载失败</div>}
+
+      {!isLoading && !isError && resources.length === 0 && (
         <div className="rounded-lg border border-dashed border-slate-200 px-4 py-6 text-center">
           <BookMarked className="mx-auto mb-2 h-6 w-6 text-slate-300" />
           <p className="text-sm text-slate-400">暂无已审核资源，去

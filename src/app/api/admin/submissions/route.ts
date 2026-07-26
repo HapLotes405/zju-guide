@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireRole, AuthError } from "@/lib/auth";
 
 // GET /api/admin/submissions — 审核列表（前端期望 {pending, reviewed}）
 export async function GET(request: NextRequest) {
-  await requireRole(request, "ADMIN");
+  try {
+    await requireRole(request, "ADMIN");
 
   const submissions = await prisma.submission.findMany({
     include: {
@@ -25,6 +26,10 @@ export async function GET(request: NextRequest) {
     .map(formatSubmission);
 
   return NextResponse.json({ data: { pending, reviewed } });
+  } catch (e) {
+    if (e instanceof AuthError) return NextResponse.json({ error: { code: e.code, message: e.message } }, { status: e.status });
+    return NextResponse.json({ error: { code: "INTERNAL_ERROR", message: "服务器内部错误" } }, { status: 500 });
+  }
 }
 
 function formatSubmission(s: {
