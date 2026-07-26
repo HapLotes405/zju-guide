@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -164,6 +164,7 @@ model RequirementGroup {
   programVersion ProgramVersion  @relation(fields: [programVersionId], references: [id], onDelete: Cascade)
   programCourses ProgramCourse[]
 
+  @@unique([programVersionId, name])
   @@index([programVersionId])
 }
 

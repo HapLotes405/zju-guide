@@ -1,8 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Docker standalone 模式（生成最小可部署包）
-  output: "standalone",
+  // Docker standalone 模式仅在 CI/Linux 环境启用
+  // Windows 下 symlink 权限问题会导致 build trace 失败
+  output: process.env.CI ? "standalone" : undefined,
 
   // 实验性功能
   experimental: {
