@@ -1,0 +1,218 @@
+# 求是学径 (Qiushi Learning Path)
+
+> 浙江大学课程学习路径共建平台 -- 从培养方案到课程图谱，从散落资料到可信路径
+
+求是学径是一个面向浙江大学本科生的课程学习路径共建平台。它把培养方案计算为按学期的行动清单，把散落的课程信息组织成结构化的知识页面，把学习资料通过投稿审核系统沉淀到课程关联中去。
+
+---
+
+## 核心功能
+
+### 四类学习路径（解决「培养方案到学期行动」断裂）
+
+| 路径组件 | 说明 | API |
+|---------|------|-----|
+| 本学期必修 | 当前学期应修读的必修课程列表 | `/api/me/path/required` |
+| 通识进度 | 按通识模块分组的学分完成情况 | `/api/me/path/gen-ed` |
+| 逾期警告 | 建议学期早于当前学期但未修完的必修课 | `/api/me/path/overdue` |
+| 辅修进度 | 辅修方案各模块的学分完成情况 | `/api/me/path/minor` |
+
+### 课程详情页（解决「课程信息到学习路径」断裂）
+
+每门课程拥有 8 个信息分区：课程身份、为什么学（前置/后续/误区）、课前预习、课中跟课、期末复习、老师评价、资源区（含 CC98 一键跳转）、图谱区（依赖树）。
+
+### 投稿审核系统（解决「散落资料到知识图谱」断裂）
+
+同学投稿学习资料 → 管理员审核通过/驳回 → 资源关联到课程公开可见。支持 7 种资源类型（电子书、笔记、真题回忆、博客、CC98 帖子、工具模板、其他），区分 4 个学习阶段（课前/课中/期末/全部）。
+
+### 其他
+
+- **教务 JSON 导入**：兼容新旧格式，自动脱敏（学号/身份证号/姓名），Zod schema 校验
+- **JWT 认证**：三级角色（VISITOR / CONTRIBUTOR / ADMIN），access + refresh token
+- **审计日志**：所有管理员操作记录（谁、什么时间、做了什么、理由）
+
+---
+
+## 技术栈
+
+| 层级 | 技术 |
+|------|------|
+| 全栈框架 | Next.js 15 (App Router) |
+| 语言 | TypeScript (strict mode) |
+| 样式 | Tailwind CSS v4 |
+| 图标 | lucide-react |
+| 数据库 ORM | Prisma 6 (SQLite 开发 / PostgreSQL 生产) |
+| 认证 | jose (自建 JWT) |
+| 数据获取 | TanStack Query (React Query) v5 |
+| 表单 | react-hook-form + zod |
+| 通知 | sonner (toast) |
+| 测试 | Vitest (单元/集成) + Playwright (E2E) |
+| 容器化 | Docker + Docker Compose |
+| 包管理 | pnpm |
+
+---
+
+## 快速开始
+
+### 前置要求
+
+- Node.js >= 22
+- pnpm >= 9
+
+### 1. 克隆仓库
+
+```bash
+git clone <repo-url>
+cd mse-wiki
+```
+
+### 2. 配置环境变量
+
+```bash
+cp .env.example .env
+# 编辑 .env，填入真实的 JWT_SECRET 等值
+```
+
+### 3. Docker Compose 一键启动
+
+```bash
+cd docker
+docker compose up -d
+```
+
+这会在后台启动两个容器：
+- **app** (mse-wiki-app) -- Next.js 开发服务器，端口 `3000`
+- **db** (mse-wiki-db) -- PostgreSQL 16，端口 `5432`
+
+首次启动后需要进入容器执行数据库迁移和种子数据：
+
+```bash
+docker compose exec app sh
+pnpm db:migrate:deploy
+pnpm db:seed
+```
+
+### 4. 本地开发（不使用 Docker）
+
+```bash
+pnpm install
+pnpm db:generate      # 生成 Prisma Client
+pnpm db:migrate:dev   # 执行数据库迁移
+pnpm db:seed          # 播种种子数据
+pnpm dev              # 启动开发服务器 http://localhost:3000
+```
+
+### 5. 默认账号
+
+| 用户名 | 密码 | 角色 |
+|--------|------|------|
+| 注册用户 | 自行注册 | 学生 (VISITOR) |
+
+---
+
+## 目录结构
+
+```
+├── prisma/
+│   ├── schema.prisma           # 数据库 Schema（12 个模型）
+│   ├── seed.ts                 # 种子数据
+│   └── migrations/             # 迁移文件
+│
+├── src/app/                    # Next.js App Router
+│   ├── (auth)/                 # 认证页面
+│   │   ├── login/page.tsx
+│   │   └── register/page.tsx
+│   ├── (dashboard)/            # 登录后页面
+│   │   ├── layout.tsx          # 布局（侧边栏 + 顶栏）
+│   │   ├── page.tsx            # 仪表盘（学分进度 + 课程导图）
+│   │   ├── onboarding/page.tsx # 引导页（选年级+专业）
+│   │   ├── courses/page.tsx    # 课程库（搜索+分页）
+│   │   ├── course/[code]/      # 课程详情（8个折叠区块）
+│   │   ├── contribute/page.tsx # 投稿页
+│   │   ├── import/page.tsx     # 教务JSON导入
+│   │   ├── resources/page.tsx  # 资料搜索
+│   │   └── settings/page.tsx   # 设置页
+│   ├── admin/                  # 管理后台
+│   │   ├── review/page.tsx     # 审核队列
+│   │   └── import/page.tsx     # 培养方案导入
+│   └── api/                    # 后端 API（19 个端点）
+│
+├── src/lib/                    # 工具库
+│   ├── auth.ts                 # JWT 认证（jose + bcryptjs）
+│   ├── api-client.ts           # 前端 API 封装
+│   ├── path-engine.ts          # 四类路径计算引擎
+│   ├── json-adapter.ts         # 教务 JSON 适配器（脱敏/多格式）
+│   ├── constants.ts            # 统一标签常量
+│   ├── prisma.ts               # Prisma 客户端单例
+│   └── utils.ts                # cn() 工具
+│
+├── src/hooks/use-auth.tsx      # 认证 Context
+├── src/components/providers.tsx # React Query + Auth Provider
+│
+├── tests/
+│   ├── unit/                   # 46 个单元测试
+│   ├── integration/            # 41 个集成测试
+│   └── e2e/                    # Playwright E2E
+│
+├── fixtures/                   # 测试JSON数据
+├── docker/                     # Docker部署配置
+├── .github/workflows/ci.yml    # CI Pipeline
+├── package.json
+├── tsconfig.json
+├── next.config.ts
+└── .env.example
+```
+
+---
+
+## 可用命令
+
+| 命令 | 说明 |
+|------|------|
+| `pnpm dev` | 启动 Next.js 开发服务器 (Turbopack) |
+| `pnpm build` | 生产构建 |
+| `pnpm start` | 启动生产服务器 |
+| `pnpm lint` | ESLint 代码检查 |
+| `pnpm typecheck` | TypeScript 类型检查 |
+| `pnpm test` | 运行 Vitest 单元测试 |
+| `pnpm test:e2e` | 运行 Playwright E2E 测试 |
+| `pnpm db:migrate:dev` | 开发环境数据库迁移 |
+| `pnpm db:migrate:deploy` | 生产环境数据库迁移 |
+| `pnpm db:seed` | 播种种子数据 |
+| `pnpm db:generate` | 生成 Prisma Client |
+| `pnpm db:studio` | 打开 Prisma Studio |
+| `pnpm format` | Prettier 格式化 |
+| `pnpm format:check` | 检查格式 |
+
+---
+
+## API 概览
+
+所有 API 统一响应格式：`{ data: T }` 或 `{ error: { code, message } }`
+
+| 端点 | 方法 | 说明 | 认证 |
+|------|------|------|------|
+| `/api/auth/register` | POST | 用户注册 | — |
+| `/api/auth/login` | POST | 用户登录 | — |
+| `/api/auth/me` | GET | 当前用户信息 | JWT |
+| `/api/courses` | GET | 课程列表（分页/筛选） | — |
+| `/api/courses/[code]` | GET | 课程详情（含前置/后续课） | — |
+| `/api/courses/[code]/resources` | GET | 已审核资源列表 | — |
+| `/api/me/programs` | GET/POST | 查看/选择培养方案 | JWT |
+| `/api/me/imports` | GET/POST | 导入教务JSON/查看历史 | JWT |
+| `/api/me/path/required` | GET | 本学期必修 | JWT |
+| `/api/me/path/gen-ed` | GET | 通识进度 | JWT |
+| `/api/me/path/overdue` | GET | 逾期警告 | JWT |
+| `/api/me/path/minor` | GET | 辅修进度 | JWT |
+| `/api/programs` | GET | 可选培养方案列表 | — |
+| `/api/resources` | POST | 提交投稿 | JWT |
+| `/api/search` | GET | 全局搜索 | — |
+| `/api/admin/submissions` | GET | 审核列表 | ADMIN |
+| `/api/admin/submissions/[id]` | PATCH | 审核操作（通过/驳回） | ADMIN |
+| `/api/admin/programs/import` | POST | 培养方案批量导入 | ADMIN |
+
+---
+
+## License
+
+本项目为浙江大学X-Lab软件训练营实践项目
