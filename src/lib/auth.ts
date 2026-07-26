@@ -7,11 +7,11 @@ import type { NextRequest } from "next/server";
 // ---------------------------------------------------------------------------
 
 const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "dev-jwt-secret"
+  process.env.JWT_SECRET || (process.env.NODE_ENV === "production" ? (() => { throw new Error("JWT_SECRET is required"); })() : "dev-jwt-secret")
 );
 
 const JWT_REFRESH_SECRET = new TextEncoder().encode(
-  process.env.JWT_REFRESH_SECRET || "dev-refresh-secret"
+  process.env.JWT_REFRESH_SECRET || (process.env.NODE_ENV === "production" ? (() => { throw new Error("JWT_REFRESH_SECRET is required"); })() : "dev-refresh-secret")
 );
 
 // ---------------------------------------------------------------------------

@@ -95,8 +95,6 @@ export default function LoginPage() {
           </a>
         </p>
 
-        <p className="mt-6 text-center text-xs text-slate-400">
-        </p>
       </div>
     </div>
   );
