@@ -7,18 +7,6 @@ import { Upload, CheckCircle, XCircle, FileJson, Shield } from "lucide-react";
 
 export default function AdminImportPage() {
   const { user, isLoading } = useAuth();
-
-  if (isLoading) return <div className="flex min-h-screen items-center justify-center"><Shield className="h-8 w-8 animate-pulse text-slate-300" /></div>;
-  if (user?.role !== "ADMIN") return (
-    <div className="flex min-h-screen items-center justify-center">
-      <div className="rounded-xl border border-red-200 bg-red-50 p-8 text-center">
-        <Shield className="mx-auto mb-3 h-10 w-10 text-red-300" />
-        <p className="text-sm font-medium text-red-700">禁止访问</p>
-        <p className="mt-1 text-xs text-red-500">仅管理员可访问此页面</p>
-      </div>
-    </div>
-  );
-
   const [jsonText, setJsonText] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{
@@ -58,6 +46,17 @@ export default function AdminImportPage() {
     };
     reader.readAsText(file);
   };
+
+  if (isLoading) return <div className="flex min-h-screen items-center justify-center"><Shield className="h-8 w-8 animate-pulse text-slate-300" /></div>;
+  if (user?.role !== "ADMIN") return (
+    <div className="flex min-h-screen items-center justify-center">
+      <div className="rounded-xl border border-red-200 bg-red-50 p-8 text-center">
+        <Shield className="mx-auto mb-3 h-10 w-10 text-red-300" />
+        <p className="text-sm font-medium text-red-700">禁止访问</p>
+        <p className="mt-1 text-xs text-red-500">仅管理员可访问此页面</p>
+      </div>
+    </div>
+  );
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
