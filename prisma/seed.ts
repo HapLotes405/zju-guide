@@ -8,8 +8,10 @@ async function main() {
 
   // ==================== 1. Users ====================
 
-  const adminHash = bcrypt.hashSync("CHANGE_ME", 10);
-  const userHash = bcrypt.hashSync("CHANGE_ME", 10);
+  const adminPass = process.env.SEED_ADMIN_PASSWORD || "CHANGE_ME";
+  const testPass = process.env.SEED_TEST_PASSWORD || "CHANGE_ME";
+  const adminHash = bcrypt.hashSync(adminPass, 10);
+  const userHash = bcrypt.hashSync(testPass, 10);
 
   const admin = await prisma.user.upsert({
     where: { username: "admin" },
