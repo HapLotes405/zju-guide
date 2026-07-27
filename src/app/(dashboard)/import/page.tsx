@@ -57,7 +57,7 @@ export default function ImportPage() {
         name: (c.name ?? c.title ?? "?") as string,
         credits: (c.credits ?? c.credit ?? 0) as number,
         semester: (c.semester ?? c.term ?? 0) as number,
-        grade: c.grade ?? c.result ?? undefined,
+        grade: (c.grade ?? c.result ?? undefined) as string | undefined,
       }));
       setPreview(previewCourses);
       setParseError("");
