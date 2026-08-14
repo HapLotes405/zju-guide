@@ -20,6 +20,9 @@ build
 # ==================== 数据库 ====================
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
+*.db.bak-*
 prisma/migrations/*/migration_lock.toml
 
 # ==================== Docker ====================
@@ -66,6 +69,8 @@ backups/
 # ==================== 内部文档（不发仓库） ====================
 docs/
 DEMO_SCRIPT.md
+training-plans/
+scripts/
 output/
 
 # ==================== 其他 ====================

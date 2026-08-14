@@ -28,6 +28,7 @@ import {
 import { cn } from "@/lib/utils";
 import { RESOURCE_TYPE_LABELS, APPLICABLE_STAGE_LABELS } from "@/lib/constants";
 import { api } from "@/lib/api-client";
+import { buildCC98SearchUrl } from "@/lib/cc98";
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -69,12 +70,28 @@ interface CourseData {
   programs: Program[];
 }
 
-interface TeacherReview {
+interface TeacherData {
+  id: string;
   name: string;
-  style: string;
-  scoring: string;
-  workload: string;
-  comment: string;
+  department: string | null;
+  school: string;
+  score: number | null;
+  ratingCount: number;
+  rollCallPct: number | null;
+  chalaoshiUrl: string | null;
+  courses: {
+    courseCode: string;
+    courseName: string;
+    gpa: number | null;
+    gpaStd: number | null;
+    studentCount: number | null;
+  }[];
+  reviews: {
+    content: string;
+    likes: number;
+    date: string | null;
+    source: string;
+  }[];
 }
 
 interface KnowledgeGraphNode {
@@ -84,17 +101,7 @@ interface KnowledgeGraphNode {
   children?: KnowledgeGraphNode[];
 }
 
-// ─── Mock Data ───────────────────────────────────────────
-
-const MOCK_TEACHERS: TeacherReview[] = [
-  {
-    name: "待评价",
-    style: "暂无数据",
-    scoring: "暂无数据",
-    workload: "暂无数据",
-    comment: "该课程暂无教师评价，欢迎贡献你的真实评价。",
-  },
-];
+// ─── Mock Data (teachers now fetched from API) ────────────
 
 const MOCK_MISCONCEPTIONS = [
   "很多同学以为这门课是纯理论课，实际上有大量实验和项目需要动手。",
@@ -346,6 +353,14 @@ export default function CourseDetailPage() {
   });
 
   const course = response;
+
+  // Teachers query — real data from chalaoshi
+  const { data: teachers = [] } = useQuery({
+    queryKey: ["course-teachers", code],
+    queryFn: () => api.get<TeacherData[]>(`/api/courses/${code}/teachers`),
+    enabled: !!code,
+  });
+
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     () => new Set(),
   );
@@ -869,30 +884,114 @@ export default function CourseDetailPage() {
           onToggle={toggleSection}
         >
           <div className="space-y-3">
-            {MOCK_TEACHERS.map((t, i) => (
-              <div
-                key={i}
-                className="rounded-lg border border-slate-200 bg-slate-50 p-4"
-              >
-                <h4 className="text-sm font-semibold text-slate-800">
-                  {t.name}
-                </h4>
+            {teachers.length === 0 ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <h4 className="text-sm font-semibold text-slate-800">待评价</h4>
                 <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-xs">
-                  <span className="text-slate-500">
-                    风格：<span className="text-slate-700">{t.style}</span>
-                  </span>
-                  <span className="text-slate-500">
-                    给分：<span className="text-slate-700">{t.scoring}</span>
-                  </span>
-                  <span className="text-slate-500">
-                    作业量：<span className="text-slate-700">{t.workload}</span>
-                  </span>
+                  <span className="text-slate-500">风格：<span className="text-slate-700">暂无数据</span></span>
+                  <span className="text-slate-500">给分：<span className="text-slate-700">暂无数据</span></span>
+                  <span className="text-slate-500">作业量：<span className="text-slate-700">暂无数据</span></span>
                 </div>
                 <p className="mt-2 text-xs leading-relaxed text-slate-500">
-                  {t.comment}
+                  该课程暂无教师评价，欢迎贡献你的真实评价。
                 </p>
               </div>
-            ))}
+            ) : (
+              teachers.map((t) => (
+                <div
+                  key={t.id}
+                  className="rounded-lg border border-slate-200 bg-slate-50 p-4"
+                >
+                  {/* Header: name + score */}
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-slate-800">
+                      {t.name}
+                      {t.department && (
+                        <span className="ml-2 text-xs font-normal text-slate-400">
+                          {t.department}
+                        </span>
+                      )}
+                      {t.chalaoshiUrl && (
+                        <a
+                          href={t.chalaoshiUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="ml-2 inline-flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 transition-colors"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          查老师
+                        </a>
+                      )}
+                    </h4>
+                    {t.score != null && (
+                      <span
+                        className={cn(
+                          "rounded-full px-2 py-0.5 text-xs font-bold",
+                          t.score >= 9
+                            ? "bg-emerald-100 text-emerald-700"
+                            : t.score >= 7
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-red-100 text-red-700",
+                        )}
+                      >
+                        {t.score.toFixed(1)}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Stats row */}
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-xs">
+                    {t.ratingCount > 0 && (
+                      <span className="text-slate-500">
+                        {t.ratingCount} 人评价
+                      </span>
+                    )}
+                    {t.rollCallPct != null && (
+                      <span className="text-slate-500">
+                        点名率 {t.rollCallPct}%
+                      </span>
+                    )}
+                    {t.courses
+                      .filter((c) => c.courseCode === code && c.gpa != null)
+                      .map((c) => (
+                        <span key={c.courseCode} className="text-slate-500">
+                          绩点{" "}
+                          <span className="font-medium text-slate-700">
+                            {c.gpa?.toFixed(2)}
+                          </span>
+                          {c.studentCount != null && (
+                            <span className="text-slate-400">
+                              {" "}
+                              / {c.studentCount}人
+                            </span>
+                          )}
+                        </span>
+                      ))}
+                  </div>
+
+                  {/* Reviews */}
+                  {t.reviews.length > 0 && (
+                    <div className="mt-2 space-y-1.5">
+                      {t.reviews.slice(0, 3).map((r, ri) => (
+                        <p
+                          key={ri}
+                          className="text-xs leading-relaxed text-slate-500"
+                        >
+                          <span className="mr-1 text-slate-300">"</span>
+                          {r.content.length > 150
+                            ? r.content.slice(0, 150) + "…"
+                            : r.content}
+                          <span className="ml-1 text-slate-300">"</span>
+                          <span className="ml-2 text-slate-400">
+                            👍 {r.likes}
+                          </span>
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         </CourseSectionCard>
 
@@ -1011,7 +1110,7 @@ function ResourceSection({ courseCode, courseName }: { courseCode: string; cours
     <div className="space-y-3">
       {/* CC98 Jump */}
       <a
-        href={`https://www.cc98.org/search?q=${encodeURIComponent(courseName)}`}
+        href={buildCC98SearchUrl(courseName)}
         target="_blank" rel="noopener noreferrer"
         className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-4 py-4 transition hover:bg-blue-100">
         <div className="flex items-center gap-3">

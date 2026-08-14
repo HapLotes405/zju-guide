@@ -50,7 +50,6 @@ export default function CoursesPage() {
                   <th className="px-4 py-3 text-left font-medium text-slate-600">课程名称</th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">学分</th>
                   <th className="px-4 py-3 text-left font-medium text-slate-600">开课单位</th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">建议学期</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -64,7 +63,6 @@ export default function CoursesPage() {
                     </td>
                     <td className="px-4 py-3 text-slate-600">{course.credits}</td>
                     <td className="px-4 py-3 text-slate-500">{course.department}</td>
-                    <td className="px-4 py-3 text-slate-500">{course.semester}</td>
                   </tr>
                 ))}
               </tbody>

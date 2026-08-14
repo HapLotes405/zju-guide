@@ -1,13 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-// GET /api/courses?major=&semester=&page=&pageSize=
+// GET /api/courses?search=&major=&semester=&page=&pageSize=
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const major = searchParams.get("major");
     const programVersionIds = searchParams.getAll("programVersionId").filter(Boolean);
     const semester = searchParams.get("semester");
+    const search = searchParams.get("search");
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
     const pageSize = Math.min(
       500,
@@ -16,6 +17,15 @@ export async function GET(request: NextRequest) {
 
     // Build the where clause
     const where: Record<string, unknown> = {};
+
+    // Text search: match code (prefix) OR name (contains)
+    if (search && search.trim()) {
+      const q = search.trim();
+      where.OR = [
+        { code: { startsWith: q } },
+        { name: { contains: q } },
+      ];
+    }
 
     if (semester) {
       where.semester = semester;
@@ -28,7 +38,6 @@ export async function GET(request: NextRequest) {
         },
       };
     } else if (major) {
-      // Filter courses that belong to the given major via ProgramCourse -> ProgramVersion
       where.programCourses = {
         some: {
           programVersion: {

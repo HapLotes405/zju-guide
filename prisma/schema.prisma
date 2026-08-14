@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -199,6 +199,7 @@ model Course {
   courseRecords CourseRecord[]
   programCourses ProgramCourse[]
   courseResources CourseResource[]
+  teacherCourses TeacherCourse[]
 
   prerequisites CoursePrerequisite[] @relation("CourseAsTarget")
   dependents    CoursePrerequisite[] @relation("CourseAsSource")
@@ -289,6 +290,57 @@ model Review {
   reviewer   User       @relation("ReviewReviewer", fields: [reviewerId], references: [id])
 
   @@index([submissionId])
+}
+
+// ==================== 教师评价 ====================
+
+model Teacher {
+  id           String   @id @default(uuid())
+  name         String
+  department   String?
+  school       String   @default("浙江大学")
+  score        Float?
+  ratingCount  Int      @default(0)
+  rollCallPct  Float?
+  chalaoshiId  Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  courses       TeacherCourse[]
+  reviews       TeacherReview[]
+
+  @@index([name])
+  @@index([department])
+  @@index([score])
+}
+
+model TeacherCourse {
+  id           String  @id @default(uuid())
+  teacherId    String
+  courseCode   String
+  gpa          Float?
+  gpaStd       Float?
+  studentCount Int?
+
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  course  Course  @relation(fields: [courseCode], references: [code], onDelete: Cascade)
+
+  @@unique([teacherId, courseCode])
+  @@index([courseCode])
+  @@index([teacherId])
+}
+
+model TeacherReview {
+  id        String  @id @default(uuid())
+  teacherId String
+  content   String
+  likes     Int     @default(0)
+  date      String?
+  source    String  @default("chalaoshi")
+
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@index([teacherId])
 }
 
 // ==================== 审计日志 ====================

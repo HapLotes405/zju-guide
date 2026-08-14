@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole, AuthError } from "@/lib/auth";
+import { sanitizeCourseName, isRealName } from "@/lib/course-name";
 import { z } from "zod";
 
 // 培养方案 JSON 格式 — 发给队友郑轶的规范
 const ProgramCourseSchema = z.object({
-  code: z.string().min(1, "课号不能为空"),
-  name: z.string().min(1, "课程名不能为空"),
+  code: z.string().trim().min(1, "课号不能为空"),
+  name: z.string().trim().min(1, "课程名不能为空"),
   credits: z.number().min(0).max(20),
   suggestedSemester: z.number().int().min(1).max(12),
   isCompulsory: z.boolean(),
@@ -19,13 +20,27 @@ const RequirementGroupSchema = z.object({
   category: z.enum(["gen_ed", "major_base", "major_core", "major_module", "personalized"]),
 });
 
-const ProgramImportSchema = z.object({
-  majorName: z.string().min(1),
-  year: z.number().int().min(2018).max(2030),
-  totalCredits: z.number().min(0).max(300),
-  requirementGroups: z.array(RequirementGroupSchema).min(1),
-  courses: z.array(ProgramCourseSchema).min(1),
-});
+const ProgramImportSchema = z
+  .object({
+    majorName: z.string().trim().min(1),
+    year: z.number().int().min(2018).max(2030),
+    totalCredits: z.number().min(0).max(300),
+    requirementGroups: z.array(RequirementGroupSchema).min(1),
+    courses: z.array(ProgramCourseSchema).min(1),
+  })
+  .superRefine((data, ctx) => {
+    // groupIndex 越界会静默把课程挂到 null 要求组，这里显式报错
+    for (let i = 0; i < data.courses.length; i++) {
+      const gi = data.courses[i]!.groupIndex;
+      if (gi !== undefined && gi >= data.requirementGroups.length) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["courses", i, "groupIndex"],
+          message: `groupIndex ${gi} 越界，要求组共 ${data.requirementGroups.length} 个`,
+        });
+      }
+    }
+  });
 
 export async function POST(request: NextRequest) {
   try {
@@ -74,12 +89,27 @@ export async function POST(request: NextRequest) {
         // 3. 导入课程
         let imported = 0;
         for (const c of parsed.courses) {
-          // 确保课程主数据存在
-          await tx.course.upsert({
+          // 清洗入参课程名（移除 *△ 等批注符号；空白名给占位符）
+          const cleanName = sanitizeCourseName(c.name, c.code);
+          // 确保课程主数据存在：仅当现有名不是「真实名」（空名或占位符）时才写入新名，
+          // 避免培养方案数据里的空名/*△名覆盖课程库的干净名称（历史脏数据根因），
+          // 同时允许占位符课程被真实名升级。
+          const existing = await tx.course.findUnique({
             where: { code: c.code },
-            create: { code: c.code, name: c.name, credits: c.credits },
-            update: { name: c.name, credits: c.credits },
+            select: { name: true },
           });
+          if (existing && isRealName(existing.name)) {
+            await tx.course.update({
+              where: { code: c.code },
+              data: { credits: c.credits },
+            });
+          } else {
+            await tx.course.upsert({
+              where: { code: c.code },
+              create: { code: c.code, name: cleanName, credits: c.credits },
+              update: { name: cleanName, credits: c.credits },
+            });
+          }
 
           // 关联到培养方案
           const groupId = c.groupIndex !== undefined ? groups[c.groupIndex] : null;

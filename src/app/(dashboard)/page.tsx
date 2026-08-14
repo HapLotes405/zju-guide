@@ -63,8 +63,6 @@ const GROUPS: CourseGroup[] = [
 
 const SEMESTERS = ["大一上","大一下","大一暑","大二上","大二下","大二暑","大三上","大三下","大四上","大四下"];
 
-const programLabel = (program: ProgramOption) => `${program.majorName} · ${program.year}级`;
-
 function ProgramCombobox({
   label,
   value,
@@ -72,6 +70,7 @@ function ProgramCombobox({
   placeholder,
   onChange,
   onRemove,
+  disabled = false,
 }: {
   label: string;
   value: string;
@@ -79,13 +78,14 @@ function ProgramCombobox({
   placeholder: string;
   onChange: (value: string) => void;
   onRemove?: () => void;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const hasExactSelection = options.some((program) => programLabel(program) === value);
+  const hasExactSelection = options.some((program) => program.majorName === value);
   const filteredOptions = value && !hasExactSelection
     ? options.filter((program) =>
-        programLabel(program).toLowerCase().includes(value.toLowerCase()),
+        program.majorName.toLowerCase().includes(value.toLowerCase()),
       )
     : options;
 
@@ -107,25 +107,27 @@ function ProgramCombobox({
           aria-expanded={open}
           aria-autocomplete="list"
           value={value}
-          onFocus={() => setOpen(true)}
+          disabled={disabled}
+          onFocus={() => { if (!disabled) setOpen(true); }}
           onChange={(event) => {
             onChange(event.target.value);
-            setOpen(true);
+            if (!disabled) setOpen(true);
           }}
           onKeyDown={(event) => {
             if (event.key === "Escape") setOpen(false);
             if (event.key === "ArrowDown") setOpen(true);
           }}
           placeholder={placeholder}
-          className={`h-10 w-full border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 ${
+          className={`h-10 w-full border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 ${
             onRemove ? "pr-20" : "pr-10"
           }`}
         />
         <button
           type="button"
           aria-label={open ? `收起${label}选项` : `展开${label}选项`}
-          onClick={() => setOpen((current) => !current)}
-          className={`absolute top-0 flex h-10 w-10 items-center justify-center text-slate-400 transition hover:text-blue-700 ${
+          onClick={() => { if (!disabled) setOpen((current) => !current); }}
+          disabled={disabled}
+          className={`absolute top-0 flex h-10 w-10 items-center justify-center text-slate-400 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:text-slate-300 ${
             onRemove ? "right-10" : "right-0"
           }`}
         >
@@ -142,7 +144,7 @@ function ProgramCombobox({
           </button>
         )}
 
-        {open && (
+        {open && !disabled && (
           <div
             role="listbox"
             className="absolute inset-x-0 top-[calc(100%+7px)] z-30 max-h-64 overflow-y-auto border border-blue-200 bg-white p-1.5 shadow-[0_18px_42px_rgb(15_23_42_/_0.16)]"
@@ -153,7 +155,7 @@ function ProgramCombobox({
             />
             {filteredOptions.length > 0 ? (
               filteredOptions.map((program) => {
-                const optionValue = programLabel(program);
+                const optionValue = program.majorName;
                 const selected = optionValue === value;
                 return (
                   <button
@@ -212,6 +214,7 @@ export default function DashboardPage() {
   const [hovered, setHovered] = useState<string | null>(null);
   const [majorInput, setMajorInput] = useState("");
   const [minorInputs, setMinorInputs] = useState<string[]>([]);
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [programsInitialized, setProgramsInitialized] = useState(false);
   const [programError, setProgramError] = useState("");
 
@@ -226,6 +229,10 @@ export default function DashboardPage() {
   });
 
   const programOptions = programCatalog?.options ?? [];
+  const yearOptions = useMemo(
+    () => (selectedYear == null ? [] : programOptions.filter((p) => p.year === selectedYear)),
+    [programOptions, selectedYear],
+  );
   const appliedProgramIds = useMemo(
     () => (userPrograms ?? []).map((program) => program.programVersion.id),
     [userPrograms],
@@ -237,8 +244,9 @@ export default function DashboardPage() {
     const minors = userPrograms
       .filter((program) => program.type === "MINOR")
       .slice(0, 3);
-    setMajorInput(major ? programLabel(major.programVersion) : "");
-    setMinorInputs(minors.map((program) => programLabel(program.programVersion)));
+    setSelectedYear(major?.programVersion.year ?? null);
+    setMajorInput(major?.programVersion.majorName ?? "");
+    setMinorInputs(minors.map((program) => program.programVersion.majorName));
     setProgramsInitialized(true);
   }, [programsInitialized, userPrograms]);
 
@@ -293,10 +301,16 @@ export default function DashboardPage() {
   });
 
   const applyProgramSelection = () => {
-    const major = programOptions.find((program) => programLabel(program) === majorInput);
-    const minors = minorInputs.map((input) =>
-      programOptions.find((program) => programLabel(program) === input),
-    );
+    if (selectedYear == null) {
+      setProgramError("请先选择年级");
+      return;
+    }
+    const findProgram = (majorName: string) =>
+      programOptions.find(
+        (program) => program.year === selectedYear && program.majorName === majorName,
+      );
+    const major = findProgram(majorInput);
+    const minors = minorInputs.map((input) => findProgram(input));
 
     if (!major) {
       setProgramError("请从候选列表中选择一个主修专业");
@@ -335,20 +349,54 @@ export default function DashboardPage() {
             <button
               type="button"
               onClick={applyProgramSelection}
-              disabled={updatePrograms.isPending || !majorInput}
+              disabled={updatePrograms.isPending || !majorInput || !selectedYear}
               className="geometry-button min-h-9 px-4 text-sm font-semibold text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-45"
             >
               {updatePrograms.isPending ? "应用中..." : "应用专业组合"}
             </button>
           </div>
 
+          {/* 第一步：选择年级 */}
+          <div className="mb-4">
+            <span className="mb-1.5 block text-xs font-semibold text-slate-600">年级</span>
+            <div className="flex flex-wrap gap-2">
+              {(programCatalog?.years ?? []).map(({ year }) => (
+                <button
+                  key={year}
+                  type="button"
+                  onClick={() => {
+                    setSelectedYear(year);
+                    setMajorInput("");
+                    setMinorInputs([]);
+                    setProgramError("");
+                  }}
+                  className={`min-h-9 rounded-lg border px-4 text-sm font-medium transition ${
+                    selectedYear === year
+                      ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                  }`}
+                >
+                  {year} 级
+                </button>
+              ))}
+              {(programCatalog?.years ?? []).length === 0 && (
+                <p className="text-xs text-slate-400">暂无可选的培养方案</p>
+              )}
+            </div>
+            {selectedYear != null && (
+              <p className="mt-1.5 text-xs text-slate-400">{yearOptions.length} 个专业可用 · 先选年级再搜索匹配专业</p>
+            )}
+          </div>
+
+          {/* 第二步：选择专业 */}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
             <ProgramCombobox
               label="主修专业"
               value={majorInput}
-              options={programOptions}
-              placeholder="输入并选择主修专业"
+              options={selectedYear != null ? yearOptions : []}
+              placeholder={selectedYear != null ? "输入并搜索主修专业" : "请先选择年级"}
               onChange={setMajorInput}
+              disabled={selectedYear == null}
             />
 
             {minorInputs.map((minor, index) => (
@@ -356,14 +404,15 @@ export default function DashboardPage() {
                 key={index}
                 label={`辅修专业 ${index + 1}`}
                 value={minor}
-                options={programOptions}
-                placeholder="输入并选择辅修专业"
+                options={selectedYear != null ? yearOptions : []}
+                placeholder={selectedYear != null ? "输入并搜索辅修专业" : "请先选择年级"}
                 onChange={(nextValue) => setMinorInputs((current) =>
                   current.map((currentValue, itemIndex) => itemIndex === index ? nextValue : currentValue)
                 )}
                 onRemove={() => setMinorInputs((current) =>
                   current.filter((_, itemIndex) => itemIndex !== index)
                 )}
+                disabled={selectedYear == null}
               />
             ))}
 
@@ -371,7 +420,8 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={() => setMinorInputs((current) => [...current, ""])}
-                className="mt-[22px] flex h-10 items-center justify-center gap-1.5 border border-dashed border-blue-300 bg-blue-50/60 px-3 text-sm font-semibold text-blue-700 transition hover:border-blue-500 hover:bg-blue-100"
+                disabled={selectedYear == null}
+                className="mt-[22px] flex h-10 items-center justify-center gap-1.5 border border-dashed border-blue-300 bg-blue-50/60 px-3 text-sm font-semibold text-blue-700 transition hover:border-blue-500 hover:bg-blue-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400"
               >
                 <Plus className="h-4 w-4" />
                 添加辅修专业

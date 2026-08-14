@@ -177,7 +177,7 @@ describe("GET /api/courses", () => {
     expect(json.pagination.total).toBeGreaterThan(0);
   });
 
-  it("clamps pageSize to max 100", async () => {
+  it("clamps pageSize to max 500", async () => {
     const req = createRequest("http://localhost/api/courses", {
       searchParams: { pageSize: "999" },
     });
@@ -186,8 +186,8 @@ describe("GET /api/courses", () => {
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(json.pagination.pageSize).toBe(100);
-    expect(json.data.length).toBeLessThanOrEqual(100);
+    expect(json.pagination.pageSize).toBe(500);
+    expect(json.data.length).toBeLessThanOrEqual(500);
   });
 
   it("each course has expected fields", async () => {
