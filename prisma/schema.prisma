@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -75,6 +75,7 @@ model User {
   reviewedSubmissions  Submission[] @relation("SubmissionReviewer")
   authoredReviews      Review[]     @relation("ReviewReviewer")
   auditLogs     AuditLog[]
+  examPreps     CourseExamPrep[]
 
   @@index([username])
   @@index([role])
@@ -200,12 +201,29 @@ model Course {
   programCourses ProgramCourse[]
   courseResources CourseResource[]
   teacherCourses TeacherCourse[]
+  examPrep    CourseExamPrep?
 
   prerequisites CoursePrerequisite[] @relation("CourseAsTarget")
   dependents    CoursePrerequisite[] @relation("CourseAsSource")
 
   @@index([name])
   @@index([department])
+}
+
+// 期末复习共建内容（重点章节 + 复习路线，用户可编辑）
+model CourseExamPrep {
+  id          String   @id @default(uuid())
+  courseCode  String   @unique
+  chapters    Json     // [{ chapter, weight, note }]
+  route       Json     // string[] — 复习步骤
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  course    Course @relation(fields: [courseCode], references: [code], onDelete: Cascade)
+  updatedBy User?  @relation(fields: [updatedById], references: [id])
+
+  @@index([courseCode])
 }
 
 // 课程依赖关系
@@ -230,6 +248,10 @@ model Resource {
   title           String
   type            ResourceType
   url             String?
+  filePath        String?  // 上传文件的存储名（uuid.ext）
+  fileName        String?  // 上传文件的原始文件名
+  fileSize        Int?     // 字节数
+  mimeType        String?
   summary         String?
   copyrightStatus CopyrightStatus @default(UNKNOWN)
   applicableStage String?         // "BEFORE" | "DURING" | "FINAL" | "ALL"

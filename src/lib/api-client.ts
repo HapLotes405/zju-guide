@@ -66,9 +66,12 @@ async function request<T>(
 ): Promise<T> {
   const token = getToken();
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
+  const headers: Record<string, string> = {};
+
+  // FormData 由浏览器自动设置 multipart boundary，不能手动指定 Content-Type
+  if (!(options.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
 
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
@@ -156,6 +159,10 @@ export const api = {
       method: "POST",
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
+  },
+
+  postForm<T = unknown>(url: string, formData: FormData, init?: Omit<RequestInit, "method" | "body">): Promise<T> {
+    return request<T>(url, { ...init, method: "POST", body: formData });
   },
 
   put<T = unknown>(url: string, body?: unknown, init?: Omit<RequestInit, "method" | "body">): Promise<T> {

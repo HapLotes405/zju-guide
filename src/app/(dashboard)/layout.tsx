@@ -5,6 +5,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
+import { QiushiMark } from "@/components/qiushi-mark";
 import {
   LayoutDashboard, BookOpen, FileText,
   Settings, LogOut, Menu, X, ChevronDown, User, Send,
@@ -18,43 +19,6 @@ const NAV_ITEMS = [
   { href: "/resources", label: "学习资料", icon: FileText },
   { href: "/settings", label: "设置", icon: Settings },
 ];
-
-function QiushiMark({ className = "" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 64 32" fill="none" aria-hidden="true">
-      <path
-        d="M3 7L16 2L31 9V29L17 22L3 27V7Z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinejoin="miter"
-      />
-      <path
-        d="M61 7L48 2L33 9V29L47 22L61 27V7Z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinejoin="miter"
-        opacity="0.78"
-      />
-      <path
-        d="M10 23L21 13L28 19L44 5"
-        stroke="var(--app-primary-light)"
-        strokeWidth="2.6"
-        strokeLinecap="square"
-        strokeLinejoin="miter"
-      />
-      <path
-        d="M38 5H44V11"
-        stroke="var(--app-primary-light)"
-        strokeWidth="2.6"
-        strokeLinecap="square"
-        strokeLinejoin="miter"
-      />
-      <path d="M10 19L14 23L10 27L6 23L10 19Z" fill="currentColor" />
-      <path d="M8 10L16 7L25 12" stroke="currentColor" strokeWidth="1" opacity="0.28" />
-      <path d="M39 12L48 7L56 10" stroke="currentColor" strokeWidth="1" opacity="0.24" />
-    </svg>
-  );
-}
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const { user, isLoading, isAuthenticated, logout } = useAuth();

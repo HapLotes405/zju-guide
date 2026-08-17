@@ -14,6 +14,9 @@ services:
       - JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-production}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-dev-refresh-secret-change}
       - NODE_ENV=production
+      - UPLOAD_DIR=/app/uploads
+    volumes:
+      - uploads:/app/uploads
     command: >
       sh -c "node node_modules/prisma/build/index.js db push --skip-generate &&
       node node_modules/tsx/dist/cli.mjs prisma/seed.ts &&
@@ -38,3 +41,4 @@ services:
 
 volumes:
   pgdata:
+  uploads:

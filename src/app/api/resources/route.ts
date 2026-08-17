@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, AuthError } from "@/lib/auth";
 import type { ResourceType, CopyrightStatus } from "@prisma/client";
+import { saveUpload, UploadError, MAX_FILE_SIZE, type SavedUpload } from "@/lib/upload";
 
 // ──────────────────────────────────────────────────────────────────────────
 // Types
@@ -57,15 +58,85 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Parse and validate the request body
+    // 2. Parse and validate the request body（兼容 JSON 与 multipart/form-data 文件上传）
     let body: CreateResourceBody;
-    try {
-      body = (await request.json()) as CreateResourceBody;
-    } catch {
-      return NextResponse.json(
-        { error: { code: "INVALID_JSON", message: "Request body is not valid JSON" } },
-        { status: 400 },
-      );
+    let upload: SavedUpload | null = null;
+    const contentType = request.headers.get("content-type") ?? "";
+
+    if (contentType.includes("multipart/form-data")) {
+      const contentLength = Number(request.headers.get("content-length") ?? 0);
+      if (contentLength > MAX_FILE_SIZE + 1024 * 1024) {
+        return NextResponse.json(
+          { error: { code: "PAYLOAD_TOO_LARGE", message: "文件大小超过 20MB 上限" } },
+          { status: 413 },
+        );
+      }
+
+      let form: FormData;
+      try {
+        form = await request.formData();
+      } catch {
+        return NextResponse.json(
+          { error: { code: "INVALID_FORM", message: "表单数据无效" } },
+          { status: 400 },
+        );
+      }
+
+      const str = (key: string): string | undefined => {
+        const v = form.get(key);
+        return typeof v === "string" && v.trim() !== "" ? v : undefined;
+      };
+
+      // courseCodes 支持 JSON 字符串或重复字段两种传法
+      let courseCodes: string[] | undefined;
+      const rawCodes = form.get("courseCodes");
+      if (typeof rawCodes === "string") {
+        try {
+          courseCodes = JSON.parse(rawCodes) as string[];
+        } catch {
+          courseCodes = undefined;
+        }
+      }
+      if (!courseCodes) {
+        const all = form.getAll("courseCodes").filter((v): v is string => typeof v === "string");
+        if (all.length > 0) courseCodes = all;
+      }
+
+      body = {
+        title: str("title"),
+        type: str("type"),
+        url: str("url"),
+        summary: str("summary"),
+        copyrightStatus: str("copyrightStatus"),
+        applicableStage: str("applicableStage"),
+        courseCodes,
+      };
+
+      const file = form.get("file");
+      if (file instanceof File && file.size > 0) {
+        try {
+          upload = await saveUpload(file);
+        } catch (e) {
+          return NextResponse.json(
+            {
+              error: {
+                code: "UPLOAD_ERROR",
+                message: e instanceof UploadError ? e.message : "文件保存失败",
+              },
+            },
+            { status: 400 },
+          );
+        }
+      }
+    } else {
+      try {
+        body = (await request.json()) as CreateResourceBody;
+      } catch {
+        return NextResponse.json(
+          { error: { code: "INVALID_JSON", message: "Request body is not valid JSON" } },
+          { status: 400 },
+        );
+      }
     }
 
     const { title, type, url, summary, copyrightStatus, applicableStage, courseCodes } = body;
@@ -191,6 +262,10 @@ export async function POST(request: NextRequest) {
           title: trimmedTitle,
           type: type as ResourceType,
           url: trimmedUrl,
+          filePath: upload?.filePath ?? null,
+          fileName: upload?.fileName ?? null,
+          fileSize: upload?.fileSize ?? null,
+          mimeType: upload?.mimeType ?? null,
           summary: trimmedSummary,
           copyrightStatus: finalCopyrightStatus,
           applicableStage: finalApplicableStage,
@@ -227,6 +302,8 @@ export async function POST(request: NextRequest) {
           title: result.resource.title,
           type: result.resource.type,
           status: result.resource.status,
+          fileName: result.resource.fileName,
+          fileSize: result.resource.fileSize,
           courseCodes,
           submittedAt: result.submission.submittedAt,
         },

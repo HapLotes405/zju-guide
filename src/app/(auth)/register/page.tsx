@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
-import { GraduationCap } from "lucide-react";
+import { QiushiMark } from "@/components/qiushi-mark";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -46,9 +46,7 @@ export default function RegisterPage() {
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 shadow-lg shadow-blue-500/20">
-            <GraduationCap className="h-6 w-6 text-white" />
-          </div>
+          <QiushiMark className="mx-auto mb-4 h-10 w-20 text-blue-700" />
           <h1 className="text-xl font-bold text-slate-900">注册求是学径</h1>
           <p className="mt-1 text-sm text-slate-500">加入浙大课程学习路径共建平台</p>
         </div>

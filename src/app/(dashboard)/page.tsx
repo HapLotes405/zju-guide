@@ -10,6 +10,8 @@ import {
   MajorFoundationIcon,
   MajorCoreIcon,
   MajorModuleIcon,
+  PracticeIcon,
+  PersonalizedIcon,
 } from "@/components/course-category-icons";
 
 // ─── 类型 ────────────────────────────────────────
@@ -47,18 +49,17 @@ interface CourseGroup {
   bar: string;
   dot: string;
   border: string;
-  icon?: ComponentType<SVGProps<SVGSVGElement>>;
-  iconColor?: string;
-  emoji?: string;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
+  iconColor: string;
 }
 
 const GROUPS: CourseGroup[] = [
   { key: "gen_ed", label: "通识基础", icon: GeneralEducationIcon, iconColor: "text-blue-600", bar: "bg-blue-500", dot: "bg-blue-500", border: "border-l-blue-500" },
   { key: "major_base", label: "专业基础", icon: MajorFoundationIcon, iconColor: "text-cyan-600", bar: "bg-cyan-500", dot: "bg-cyan-500", border: "border-l-cyan-500" },
   { key: "major_core", label: "专业核心", icon: MajorCoreIcon, iconColor: "text-amber-600", bar: "bg-amber-500", dot: "bg-amber-500", border: "border-l-amber-500" },
-  { key: "major_practice", label: "实验实践", emoji: "🔬", bar: "bg-teal-500", dot: "bg-teal-500", border: "border-l-teal-500" },
+  { key: "major_practice", label: "实验实践", icon: PracticeIcon, iconColor: "text-teal-600", bar: "bg-teal-500", dot: "bg-teal-500", border: "border-l-teal-500" },
   { key: "major_module", label: "专业模块选修", icon: MajorModuleIcon, iconColor: "text-emerald-600", bar: "bg-emerald-500", dot: "bg-emerald-500", border: "border-l-emerald-500" },
-  { key: "personalized", label: "个性修读", emoji: "🎯", bar: "bg-blue-500", dot: "bg-blue-500", border: "border-l-blue-500" },
+  { key: "personalized", label: "个性修读", icon: PersonalizedIcon, iconColor: "text-blue-600", bar: "bg-blue-500", dot: "bg-blue-500", border: "border-l-blue-500" },
 ];
 
 const SEMESTERS = ["大一上","大一下","大一暑","大二上","大二下","大二暑","大三上","大三下","大四上","大四下"];
@@ -458,11 +459,7 @@ export default function DashboardPage() {
                 className={`credit-category min-h-[72px] bg-white p-3 text-left text-xs transition ${filter === g.key ? "is-active" : ""}`}>
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-1.5 font-medium text-slate-600">
-                    {GroupIcon ? (
-                      <GroupIcon className={`h-4 w-4 shrink-0 ${g.iconColor}`} />
-                    ) : (
-                      <span aria-hidden="true">{g.emoji}</span>
-                    )}
+                    <GroupIcon className={`h-4 w-4 shrink-0 ${g.iconColor}`} />
                     {g.label}
                   </span>
                   <span className="tabular-nums text-slate-400">{s.earned}/{s.total}</span>
@@ -512,11 +509,7 @@ export default function DashboardPage() {
               <div key={g.key} className={`course-group relative border border-l-4 border-slate-200 ${g.border} bg-white px-4 py-4 lg:px-5`}>
                 <span className={`absolute -left-[9px] top-5 h-3.5 w-3.5 ${g.dot} border-[3px] border-white`} />
                 <h3 className="mb-5 flex items-center gap-3 text-xl font-bold tracking-tight text-slate-800">
-                  {GroupIcon ? (
-                    <GroupIcon className={`h-7 w-7 shrink-0 ${g.iconColor}`} />
-                  ) : (
-                    <span className="text-[26px]" aria-hidden="true">{g.emoji}</span>
-                  )}
+                  <GroupIcon className={`h-7 w-7 shrink-0 ${g.iconColor}`} />
                   {g.label}
                   <span className="ml-1 text-base font-normal text-slate-400">({items.length}门)</span>
                 </h3>

@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import {
   BookOpen,
@@ -24,11 +24,18 @@ import {
   TrendingUp,
   Sparkles,
   PenTool,
+  Send,
+  Loader2,
+  Paperclip,
+  Download,
+  X,
 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { RESOURCE_TYPE_LABELS, APPLICABLE_STAGE_LABELS } from "@/lib/constants";
-import { api } from "@/lib/api-client";
+import { api, ApiError } from "@/lib/api-client";
 import { buildCC98SearchUrl } from "@/lib/cc98";
+import { ExamPrepSection } from "@/components/exam-prep-section";
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -128,25 +135,6 @@ const MOCK_WEEKLY_RHYTHM = [
   { week: "第5-8周", focus: "核心理论深入" },
   { week: "第9-12周", focus: "实验与项目实践" },
   { week: "第13-16周", focus: "综合复习与拓展" },
-];
-
-const MOCK_REVIEW_ROUTE = [
-  "Step 1: 过一遍课件，整理知识框架（3天）",
-  "Step 2: 刷近3年真题，总结题型（5天）",
-  "Step 3: 重点章节精读 + 错题整理（4天）",
-  "Step 4: 模拟考试 + 查漏补缺（2天）",
-];
-
-const MOCK_EXAM_CLUES = [
-  "CC98 历年真题回忆帖（搜索课程名）",
-  "打印店真题合集",
-  "学长学姐传承的复习资料",
-];
-
-const MOCK_KEY_CHAPTERS = [
-  { chapter: "第1-3章", weight: "约30%", note: "基础概念，必拿分" },
-  { chapter: "第4-6章", weight: "约40%", note: "核心重点，拉分题型" },
-  { chapter: "第7-9章", weight: "约30%", note: "综合应用" },
 ];
 
 // ─── Sub-components ──────────────────────────────────────
@@ -795,84 +783,7 @@ export default function CourseDetailPage() {
           expanded={expandedSections.has("final")}
           onToggle={toggleSection}
         >
-          <div className="space-y-4">
-            {/* Review route */}
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                复习路线
-              </h3>
-              <div className="space-y-2">
-                {MOCK_REVIEW_ROUTE.map((step, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-3 rounded-md bg-blue-50 px-4 py-2.5"
-                  >
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
-                      {i + 1}
-                    </span>
-                    <span className="text-sm text-slate-700">{step}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Key chapters */}
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                重点章节
-              </h3>
-              <div className="overflow-hidden rounded-lg border border-slate-200">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-slate-500">
-                        章节
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-slate-500">
-                        分值占比
-                      </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-slate-500">
-                        说明
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {MOCK_KEY_CHAPTERS.map((c, i) => (
-                      <tr key={i} className="border-t border-slate-100">
-                        <td className="px-4 py-2.5 font-medium text-slate-700">
-                          {c.chapter}
-                        </td>
-                        <td className="px-4 py-2.5 text-blue-600">
-                          {c.weight}
-                        </td>
-                        <td className="px-4 py-2.5 text-slate-500">
-                          {c.note}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Exam clues */}
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                真题线索
-              </h3>
-              <ul className="space-y-1.5">
-                {MOCK_EXAM_CLUES.map((clue, i) => (
-                  <li
-                    key={i}
-                    className="flex items-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800"
-                  >
-                    <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-                    {clue}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
+          <ExamPrepSection courseCode={course.code} />
         </CourseSectionCard>
 
         {/* 6. 老师评价 */}
@@ -1098,10 +1009,11 @@ export default function CourseDetailPage() {
 
 // ─── 资源区子组件 ──────────────────────────────
 function ResourceSection({ courseCode, courseName }: { courseCode: string; courseName: string }) {
+  const [showForm, setShowForm] = useState(false);
   const { data: resources = [], isLoading, isError } = useQuery({
     queryKey: ["course-resources", courseCode],
     queryFn: () =>
-      api.get<{ id: string; title: string; type: string; url: string | null; summary: string | null; applicableStage: string | null; submitterName: string }[]>(
+      api.get<{ id: string; title: string; type: string; url: string | null; summary: string | null; applicableStage: string | null; submitterName: string; createdAt: string; filePath: string | null; fileName: string | null; fileSize: number | null }[]>(
         `/api/courses/${courseCode}/resources`,
       ),
   });
@@ -1125,6 +1037,20 @@ function ResourceSection({ courseCode, courseName }: { courseCode: string; cours
         <ChevronDown className="h-5 w-5 -rotate-90 text-blue-400" />
       </a>
 
+      {/* 投稿窗口：审核通过后展示在下方列表 */}
+      {showForm ? (
+        <ContributeForm courseCode={courseCode} onClose={() => setShowForm(false)} />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setShowForm(true)}
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-blue-300 bg-blue-50/50 px-4 py-3 text-sm font-medium text-blue-600 transition hover:bg-blue-100"
+        >
+          <Send className="h-4 w-4" />
+          投稿资源（审核通过后展示）
+        </button>
+      )}
+
       {/* Approved resources */}
       {isLoading && <div className="py-4 text-center text-sm text-slate-400">加载中...</div>}
 
@@ -1133,9 +1059,7 @@ function ResourceSection({ courseCode, courseName }: { courseCode: string; cours
       {!isLoading && !isError && resources.length === 0 && (
         <div className="rounded-lg border border-dashed border-slate-200 px-4 py-6 text-center">
           <BookMarked className="mx-auto mb-2 h-6 w-6 text-slate-300" />
-          <p className="text-sm text-slate-400">暂无已审核资源，去
-            <a href="/contribute" className="mx-1 text-blue-500 hover:underline">投稿</a>
-          贡献第一个</p>
+          <p className="text-sm text-slate-400">暂无已审核资源，欢迎投稿分享</p>
         </div>
       )}
 
@@ -1157,16 +1081,203 @@ function ResourceSection({ courseCode, courseName }: { courseCode: string; cours
           <h4 className="font-medium text-slate-900">{r.title}</h4>
           {r.summary && <p className="mt-1 text-sm text-slate-500">{r.summary}</p>}
           <div className="mt-2 flex items-center justify-between text-xs text-slate-400">
-            <span>贡献者：{r.submitterName}</span>
-            {r.url && (
-              <a href={r.url} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-1 text-blue-500 hover:underline">
-                <ExternalLink className="h-3 w-3" />查看原文
-              </a>
-            )}
+            <span>贡献者：{r.submitterName} · {r.createdAt.slice(0, 10)}</span>
+            <div className="flex items-center gap-3">
+              {r.fileName && r.filePath && (
+                <a href={`/api/files/${r.filePath}`}
+                  className="flex items-center gap-1 text-blue-500 hover:underline">
+                  <Download className="h-3 w-3" />下载附件
+                </a>
+              )}
+              {r.url && (
+                <a href={r.url} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-blue-500 hover:underline">
+                  <ExternalLink className="h-3 w-3" />查看原文
+                </a>
+              )}
+            </div>
           </div>
         </div>
       ))}
     </div>
+  );
+}
+
+// ─── 资源投稿表单（课程页内嵌） ──────────────────────────
+function ContributeForm({ courseCode, onClose }: { courseCode: string; onClose: () => void }) {
+  const [title, setTitle] = useState("");
+  const [type, setType] = useState("LECTURE_NOTE");
+  const [url, setUrl] = useState("");
+  const [stage, setStage] = useState("ALL");
+  const [summary, setSummary] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) {
+      toast.error("请填写资源标题");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const form = new FormData();
+      form.set("title", title.trim());
+      form.set("type", type);
+      if (url.trim()) form.set("url", url.trim());
+      if (summary.trim()) form.set("summary", summary.trim());
+      form.set("applicableStage", stage);
+      form.set("courseCodes", JSON.stringify([courseCode]));
+      if (file) form.set("file", file);
+      await api.postForm("/api/resources", form);
+      toast.success("已提交，审核通过后将展示在资源区");
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "提交失败，请稍后重试");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="space-y-3 rounded-lg border border-blue-200 bg-blue-50/40 p-4">
+      <div>
+        <label htmlFor="ct-title" className="mb-1 block text-xs font-medium text-slate-600">
+          资源标题 <span className="text-red-500">*</span>
+        </label>
+        <input
+          id="ct-title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="如：2024 秋冬期末真题回忆"
+          className="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label htmlFor="ct-type" className="mb-1 block text-xs font-medium text-slate-600">
+            类型
+          </label>
+          <select
+            id="ct-type"
+            value={type}
+            onChange={(e) => setType(e.target.value)}
+            className="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            {Object.entries(RESOURCE_TYPE_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="ct-stage" className="mb-1 block text-xs font-medium text-slate-600">
+            适用阶段
+          </label>
+          <select
+            id="ct-stage"
+            value={stage}
+            onChange={(e) => setStage(e.target.value)}
+            className="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            {Object.entries(APPLICABLE_STAGE_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label htmlFor="ct-url" className="mb-1 block text-xs font-medium text-slate-600">
+          链接（可选）
+        </label>
+        <input
+          id="ct-url"
+          type="url"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://..."
+          className="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        />
+      </div>
+
+      <div>
+        <label htmlFor="ct-summary" className="mb-1 block text-xs font-medium text-slate-600">
+          摘要（可选）
+        </label>
+        <textarea
+          id="ct-summary"
+          value={summary}
+          onChange={(e) => setSummary(e.target.value)}
+          rows={2}
+          placeholder="简单介绍一下这份资料"
+          className="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        />
+      </div>
+
+      <div>
+        <span className="mb-1 block text-xs font-medium text-slate-600">
+          附件（可选，20MB 内）
+        </span>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.txt,.md,.png,.jpg,.jpeg"
+          className="hidden"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        />
+        {file ? (
+          <div className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2">
+            <Paperclip className="h-4 w-4 flex-shrink-0 text-slate-400" />
+            <span className="min-w-0 flex-1 truncate text-sm text-slate-700">
+              {file.name}
+            </span>
+            <span className="flex-shrink-0 text-xs text-slate-400">
+              {(file.size / 1024 / 1024).toFixed(1)}MB
+            </span>
+            <button
+              type="button"
+              aria-label="移除附件"
+              onClick={() => {
+                setFile(null);
+                if (fileInputRef.current) fileInputRef.current.value = "";
+              }}
+              className="flex-shrink-0 text-slate-400 transition hover:text-red-500"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-slate-300 bg-white px-3 py-2 text-sm text-slate-500 transition hover:border-blue-400 hover:text-blue-600"
+          >
+            <Paperclip className="h-4 w-4" />
+            选择附件（PDF / 文档 / 图片 / 压缩包）
+          </button>
+        )}
+      </div>
+
+      <div className="flex items-center justify-end gap-2 pt-1">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={submitting}
+          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+        >
+          取消
+        </button>
+        <button
+          type="submit"
+          disabled={submitting}
+          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
+        >
+          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          提交投稿
+        </button>
+      </div>
+    </form>
   );
 }
