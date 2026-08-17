@@ -36,6 +36,7 @@ import { RESOURCE_TYPE_LABELS, APPLICABLE_STAGE_LABELS } from "@/lib/constants";
 import { api, ApiError } from "@/lib/api-client";
 import { buildCC98SearchUrl } from "@/lib/cc98";
 import { ExamPrepSection } from "@/components/exam-prep-section";
+import { useAuth } from "@/hooks/use-auth";
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -364,6 +365,16 @@ export default function CourseDetailPage() {
       } else {
         next.add(id);
       }
+      return next;
+    });
+  };
+
+  // 只展开、不折叠：供卡片内的子表单（投稿 / 复习编辑）打开时保证可见，避免被折叠裁剪
+  const ensureExpanded = (id: string) => {
+    setExpandedSections((current) => {
+      if (current.has(id)) return current;
+      const next = new Set(current);
+      next.add(id);
       return next;
     });
   };
@@ -783,7 +794,7 @@ export default function CourseDetailPage() {
           expanded={expandedSections.has("final")}
           onToggle={toggleSection}
         >
-          <ExamPrepSection courseCode={course.code} />
+          <ExamPrepSection courseCode={course.code} onExpand={() => ensureExpanded("final")} />
         </CourseSectionCard>
 
         {/* 6. 老师评价 */}
@@ -914,7 +925,7 @@ export default function CourseDetailPage() {
           expanded={expandedSections.has("resources")}
           onToggle={toggleSection}
         >
-          <ResourceSection courseCode={course.code} courseName={course.name} />
+          <ResourceSection courseCode={course.code} courseName={course.name} onExpand={() => ensureExpanded("resources")} />
         </CourseSectionCard>
 
         {/* 8. 图谱区 */}
@@ -1008,8 +1019,18 @@ export default function CourseDetailPage() {
 }
 
 // ─── 资源区子组件 ──────────────────────────────
-function ResourceSection({ courseCode, courseName }: { courseCode: string; courseName: string }) {
+function ResourceSection({
+  courseCode,
+  courseName,
+  onExpand,
+}: {
+  courseCode: string;
+  courseName: string;
+  onExpand: () => void;
+}) {
+  const { user } = useAuth();
   const [showForm, setShowForm] = useState(false);
+  const canContribute = user?.role === "CONTRIBUTOR" || user?.role === "ADMIN";
   const { data: resources = [], isLoading, isError } = useQuery({
     queryKey: ["course-resources", courseCode],
     queryFn: () =>
@@ -1037,18 +1058,29 @@ function ResourceSection({ courseCode, courseName }: { courseCode: string; cours
         <ChevronDown className="h-5 w-5 -rotate-90 text-blue-400" />
       </a>
 
-      {/* 投稿窗口：审核通过后展示在下方列表 */}
-      {showForm ? (
-        <ContributeForm courseCode={courseCode} onClose={() => setShowForm(false)} />
+      {/* 投稿窗口：审核通过后展示在下方列表；仅贡献者及以上可见（VISITOR 提交会被服务端 403） */}
+      {canContribute ? (
+        showForm ? (
+          <ContributeForm courseCode={courseCode} onClose={() => setShowForm(false)} />
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              setShowForm(true);
+              onExpand(); // 展开父卡片，避免表单被折叠裁剪
+            }}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-blue-300 bg-blue-50/50 px-4 py-3 text-sm font-medium text-blue-600 transition hover:bg-blue-100"
+          >
+            <Send className="h-4 w-4" />
+            投稿资源（审核通过后展示）
+          </button>
+        )
       ) : (
-        <button
-          type="button"
-          onClick={() => setShowForm(true)}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-blue-300 bg-blue-50/50 px-4 py-3 text-sm font-medium text-blue-600 transition hover:bg-blue-100"
-        >
-          <Send className="h-4 w-4" />
-          投稿资源（审核通过后展示）
-        </button>
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-center">
+          <p className="text-sm text-slate-500">
+            投稿资源需要「贡献者」及以上身份
+          </p>
+        </div>
       )}
 
       {/* Approved resources */}

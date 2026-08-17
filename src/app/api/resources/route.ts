@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, AuthError } from "@/lib/auth";
 import type { ResourceType, CopyrightStatus } from "@prisma/client";
-import { saveUpload, UploadError, MAX_FILE_SIZE, type SavedUpload } from "@/lib/upload";
+import { saveUpload, uploadPath, UploadError, MAX_FILE_SIZE, type SavedUpload } from "@/lib/upload";
+import { unlink } from "node:fs/promises";
 
 // ──────────────────────────────────────────────────────────────────────────
 // Types
@@ -61,6 +62,7 @@ export async function POST(request: NextRequest) {
     // 2. Parse and validate the request body（兼容 JSON 与 multipart/form-data 文件上传）
     let body: CreateResourceBody;
     let upload: SavedUpload | null = null;
+    let pendingFile: File | null = null;
     const contentType = request.headers.get("content-type") ?? "";
 
     if (contentType.includes("multipart/form-data")) {
@@ -79,6 +81,28 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           { error: { code: "INVALID_FORM", message: "表单数据无效" } },
           { status: 400 },
+        );
+      }
+
+      // 兜底：即便 Content-Length 缺失或被伪造，解析后仍限制总体积与文件数，防内存/磁盘滥用
+      let totalBytes = 0;
+      let fileCount = 0;
+      for (const value of form.values()) {
+        if (value instanceof File) {
+          totalBytes += value.size;
+          fileCount += 1;
+        }
+      }
+      if (totalBytes > MAX_FILE_SIZE) {
+        return NextResponse.json(
+          { error: { code: "PAYLOAD_TOO_LARGE", message: "上传文件总大小超过 20MB 上限" } },
+          { status: 413 },
+        );
+      }
+      if (fileCount > 10) {
+        return NextResponse.json(
+          { error: { code: "PAYLOAD_TOO_LARGE", message: "上传文件数量超过上限" } },
+          { status: 413 },
         );
       }
 
@@ -114,19 +138,8 @@ export async function POST(request: NextRequest) {
 
       const file = form.get("file");
       if (file instanceof File && file.size > 0) {
-        try {
-          upload = await saveUpload(file);
-        } catch (e) {
-          return NextResponse.json(
-            {
-              error: {
-                code: "UPLOAD_ERROR",
-                message: e instanceof UploadError ? e.message : "文件保存失败",
-              },
-            },
-            { status: 400 },
-          );
-        }
+        // 仅先暂存文件引用，字段校验 + 课程存在性校验全部通过后再落盘，避免孤儿文件
+        pendingFile = file;
       }
     } else {
       try {
@@ -202,6 +215,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 仅允许 http/https 外链，防止 javascript: / data: 等协议被渲染为可点击链接造成存储型 XSS
+    if (url && typeof url === "string" && !/^https?:\/\/\S+$/i.test(url.trim())) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "url 必须以 http:// 或 https:// 开头" } },
+        { status: 400 },
+      );
+    }
+
     // Validate courseCodes
     if (!Array.isArray(courseCodes) || courseCodes.length === 0) {
       return NextResponse.json(
@@ -227,14 +248,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 去重并规范化，避免重复 courseCode 命中唯一约束返回 500
+    const uniqueCourseCodes = [...new Set(courseCodes.map((c) => c.trim()))];
+
     // 3. Verify that all course codes exist
     const existingCourses = await prisma.course.findMany({
-      where: { code: { in: courseCodes } },
+      where: { code: { in: uniqueCourseCodes } },
       select: { code: true },
     });
 
     const existingCodes = new Set(existingCourses.map((c) => c.code));
-    const missingCodes = courseCodes.filter((c) => !existingCodes.has(c));
+    const missingCodes = uniqueCourseCodes.filter((c) => !existingCodes.has(c));
 
     if (missingCodes.length > 0) {
       return NextResponse.json(
@@ -248,51 +272,80 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Create the Resource, CourseResource associations, and Submission in a transaction
+    // 4. 全部校验通过后再落盘文件（此前不落盘，校验失败时不会留下孤儿文件）
+    if (pendingFile) {
+      try {
+        upload = await saveUpload(pendingFile);
+      } catch (e) {
+        return NextResponse.json(
+          {
+            error: {
+              code: "UPLOAD_ERROR",
+              message: e instanceof UploadError ? e.message : "文件保存失败",
+            },
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    // 5. Create the Resource, CourseResource associations, and Submission in a transaction
     const trimmedTitle = title.trim();
     const trimmedUrl = url?.trim() || null;
     const trimmedSummary = summary?.trim() || null;
     const finalCopyrightStatus = (copyrightStatus as CopyrightStatus) || "UNKNOWN";
     const finalApplicableStage = applicableStage || null;
 
-    const result = await prisma.$transaction(async (tx) => {
-      // 4a. Create the Resource with DRAFT status
-      const resource = await tx.resource.create({
-        data: {
-          title: trimmedTitle,
-          type: type as ResourceType,
-          url: trimmedUrl,
-          filePath: upload?.filePath ?? null,
-          fileName: upload?.fileName ?? null,
-          fileSize: upload?.fileSize ?? null,
-          mimeType: upload?.mimeType ?? null,
-          summary: trimmedSummary,
-          copyrightStatus: finalCopyrightStatus,
-          applicableStage: finalApplicableStage,
-          status: "DRAFT",
-          submitterId: userId,
-        },
-      });
+    const result = await prisma
+      .$transaction(async (tx) => {
+        // 5a. Create the Resource with DRAFT status
+        const resource = await tx.resource.create({
+          data: {
+            title: trimmedTitle,
+            type: type as ResourceType,
+            url: trimmedUrl,
+            filePath: upload?.filePath ?? null,
+            fileName: upload?.fileName ?? null,
+            fileSize: upload?.fileSize ?? null,
+            mimeType: upload?.mimeType ?? null,
+            summary: trimmedSummary,
+            copyrightStatus: finalCopyrightStatus,
+            applicableStage: finalApplicableStage,
+            status: "DRAFT",
+            submitterId: userId,
+          },
+        });
 
-      // 4b. Create CourseResource associations
-      await tx.courseResource.createMany({
-        data: courseCodes.map((courseCode) => ({
-          resourceId: resource.id,
-          courseCode,
-        })),
-      });
+        // 5b. Create CourseResource associations
+        await tx.courseResource.createMany({
+          data: uniqueCourseCodes.map((courseCode) => ({
+            resourceId: resource.id,
+            courseCode,
+          })),
+        });
 
-      // 4c. Create a Submission (result is null = PENDING)
-      const submission = await tx.submission.create({
-        data: {
-          resourceId: resource.id,
-          submitterId: userId,
-          submittedAt: new Date(),
-        },
-      });
+        // 5c. Create a Submission (result is null = PENDING)
+        const submission = await tx.submission.create({
+          data: {
+            resourceId: resource.id,
+            submitterId: userId,
+            submittedAt: new Date(),
+          },
+        });
 
-      return { resource, submission };
-    });
+        return { resource, submission };
+      })
+      .catch(async (e) => {
+        // 事务失败（数据库异常等）：清理已保存的文件，避免孤儿文件堆积
+        if (upload) {
+          try {
+            await unlink(uploadPath(upload.filePath));
+          } catch {
+            // 忽略清理失败，原异常优先抛出
+          }
+        }
+        throw e;
+      });
 
     return NextResponse.json(
       {
@@ -304,7 +357,7 @@ export async function POST(request: NextRequest) {
           status: result.resource.status,
           fileName: result.resource.fileName,
           fileSize: result.resource.fileSize,
-          courseCodes,
+          courseCodes: uniqueCourseCodes,
           submittedAt: result.submission.submittedAt,
         },
       },

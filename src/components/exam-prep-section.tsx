@@ -22,9 +22,15 @@ interface ExamPrepData {
   updatedAt: string;
 }
 
-export function ExamPrepSection({ courseCode }: { courseCode: string }) {
+export function ExamPrepSection({
+  courseCode,
+  onExpand,
+}: {
+  courseCode: string;
+  onExpand?: () => void;
+}) {
   const queryClient = useQueryClient();
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["exam-prep", courseCode],
     queryFn: () =>
       api.get<ExamPrepData | null>(`/api/courses/${courseCode}/exam-prep`),
@@ -36,9 +42,12 @@ export function ExamPrepSection({ courseCode }: { courseCode: string }) {
   const [saving, setSaving] = useState(false);
 
   const startEdit = () => {
-    setRoute(data?.route ?? []);
-    setChapters(data?.chapters ?? []);
+    // 数据未就绪（加载中 / 请求失败）时禁止进入编辑态，防止空快照覆盖既有内容
+    if (isLoading || isError || data == null) return;
+    setRoute(data.route);
+    setChapters(data.chapters);
     setEditing(true);
+    onExpand?.(); // 展开所在卡片，避免编辑器被折叠裁剪
   };
 
   const save = async () => {
@@ -226,7 +235,8 @@ export function ExamPrepSection({ courseCode }: { courseCode: string }) {
         <button
           type="button"
           onClick={startEdit}
-          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:border-blue-300 hover:text-blue-700"
+          disabled={isLoading || isError}
+          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:border-blue-300 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Pencil className="h-3.5 w-3.5" />
           编辑
@@ -237,7 +247,20 @@ export function ExamPrepSection({ courseCode }: { courseCode: string }) {
         <div className="py-4 text-center text-sm text-slate-400">加载中...</div>
       )}
 
-      {!isLoading && isEmpty && (
+      {isError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-4 text-center">
+          <p className="text-sm text-red-600">复习内容加载失败</p>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="mt-2 text-xs font-medium text-blue-600 hover:underline"
+          >
+            点击重试
+          </button>
+        </div>
+      )}
+
+      {!isLoading && !isError && isEmpty && (
         <div className="rounded-lg border border-dashed border-slate-200 px-4 py-6 text-center">
           <p className="text-sm text-slate-400">
             暂无复习内容，点击右上角「编辑」贡献第一条

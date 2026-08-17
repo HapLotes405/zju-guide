@@ -6,7 +6,7 @@ export default defineConfig({
     globals: true,
     fileParallelism: false,
     env: {
-      DATABASE_URL: "file:./test.db",
+      DATABASE_URL: "postgresql://msewiki:msewiki@127.0.0.1:5432/msewiki_test",
       PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION: "全自动",
     },
     globalSetup: ["./tests/global-setup.ts"],

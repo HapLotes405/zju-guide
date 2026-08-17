@@ -23,7 +23,8 @@ build
 *.db-wal
 *.db-shm
 *.db.bak-*
-prisma/migrations/*/migration_lock.toml
+
+# Prisma 迁移文件需纳入版本控制（`*.sql` 规则误吞，见下方「备份」区重新包含）
 
 # ==================== Docker ====================
 docker-compose.override.yml
@@ -61,6 +62,9 @@ playwright/.cache
 backups/
 *.sql
 *.sql.gz
+# Prisma 迁移文件虽匹配 *.sql，但属于版本控制内容，需重新包含
+!prisma/migrations/**/migration.sql
+!prisma/migrations/**/migration_lock.toml
 
 # ==================== AI 工具配置 ====================
 .claude/
@@ -80,3 +84,7 @@ output/
 .cache
 tmp
 temp
+
+# ==================== 运行时与本地测试产物 ====================
+/uploads/
+/test-files/

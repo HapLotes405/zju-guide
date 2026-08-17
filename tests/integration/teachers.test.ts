@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { createRequest } from "../test-utils";
+import { createRequest, cleanDatabase } from "../test-utils";
 
 // Dynamic import — will fail until the route handler exists
 let teachersHandler: typeof import("@/app/api/courses/[code]/teachers/route").GET;
@@ -16,10 +16,12 @@ beforeAll(async () => {
   teachersHandler = mod.GET;
 
   // --- Clean existing data ---
+  // teacher 相关表先删（TeacherCourse→Course 外键），其余交给共享的完整清理
+  // cleanDatabase 会先删 programCourse 等引用表，避免 course.deleteMany 撞外键
   await prisma.teacherReview.deleteMany();
   await prisma.teacherCourse.deleteMany();
   await prisma.teacher.deleteMany();
-  await prisma.course.deleteMany();
+  await cleanDatabase();
 
   // --- Seed test course: MSE2001M 材料科学基础 ---
   await prisma.course.create({
@@ -93,7 +95,7 @@ afterAll(async () => {
   await prisma.teacherReview.deleteMany();
   await prisma.teacherCourse.deleteMany();
   await prisma.teacher.deleteMany();
-  await prisma.course.deleteMany();
+  await cleanDatabase();
   await prisma.$disconnect();
 });
 

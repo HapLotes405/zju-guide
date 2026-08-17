@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import { GraduationCap, ArrowRight, Search } from "lucide-react";
 
@@ -13,6 +13,7 @@ interface ProgramData {
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [year, setYear] = useState<number | null>(null);
   const [major, setMajor] = useState("");
   const [majorSearch, setMajorSearch] = useState("");
@@ -24,7 +25,11 @@ export default function OnboardingPage() {
 
   const selectMutation = useMutation({
     mutationFn: () => api.post("/api/me/programs", { majorName: major, year: year!, type: "MAJOR" }),
-    onSuccess: () => router.push("/"),
+    onSuccess: async () => {
+      // 失效布局层 ["my-programs"] 缓存，否则布局仍认为"无培养方案"而跳回引导页
+      await queryClient.invalidateQueries({ queryKey: ["my-programs"] });
+      router.push("/");
+    },
   });
 
   const years = data?.years ?? [];
