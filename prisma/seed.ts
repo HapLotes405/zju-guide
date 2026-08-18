@@ -6,6 +6,16 @@ const prisma = new PrismaClient();
 async function main() {
   console.log("🌱 Seeding database...");
 
+  // ==================== 0. 空库守卫 ====================
+  // 数据库已有任何培养方案时跳过 seed，仅作为空库的首次初始化。
+  // 否则 docker-compose 每次启动都会执行本脚本，deleteMany/upsert 会
+  // 销毁迁移导入的真实数据（如 RequirementGroup 组结构、ProgramCourse 关联）。
+  if ((await prisma.programVersion.count()) > 0) {
+    console.log("⏭️  Database already has data, skipping seed.");
+    return;
+  }
+  console.log("  空库：开始初始化 seed 数据…");
+
   // ==================== 1. Users ====================
 
   const adminPass = process.env.SEED_ADMIN_PASSWORD || "admin123";
