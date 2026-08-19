@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api-client";
+import { RESOURCE_TYPE_LABELS, APPLICABLE_STAGE_LABELS } from "@/lib/constants";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -39,7 +40,7 @@ type ResourceTypeEnum =
   | "TOOL_TEMPLATE"
   | "OTHER";
 
-type ApplicableStageEnum = "BEFORE" | "DURING" | "FINAL" | "ALL";
+type ApplicableStageEnum = "COURSE" | "QUIZ" | "MIDTERM" | "FINAL";
 
 type CopyrightStatusEnum =
   | "PUBLIC_DOMAIN"
@@ -56,22 +57,8 @@ interface CourseOption {
 
 // ─── Constants ──────────────────────────────────────────────
 
-const RESOURCE_TYPE_LABELS: Record<ResourceTypeEnum, string> = {
-  EBOOK: "电子书/教材",
-  LECTURE_NOTE: "课堂笔记",
-  EXAM_RECALL: "真题回忆",
-  BLOG: "博客/经验帖",
-  CC98_POST: "CC98 帖子",
-  TOOL_TEMPLATE: "工具/模板",
-  OTHER: "其他",
-};
-
-const STAGE_LABELS: Record<ApplicableStageEnum, string> = {
-  BEFORE: "课前预习",
-  DURING: "课中跟课",
-  FINAL: "期末复习",
-  ALL: "全部阶段",
-};
+// 资源类型 / 适用阶段标签统一从 @/lib/constants 导入，避免与课程页/审核页漂移
+const STAGE_LABELS = APPLICABLE_STAGE_LABELS;
 
 const COPYRIGHT_LABELS: Record<CopyrightStatusEnum, string> = {
   PUBLIC_DOMAIN: "公共领域 / 原创内容",
@@ -108,7 +95,7 @@ const contributeSchema = z.object({
     .max(500, "摘要最多 500 个字符")
     .optional()
     .or(z.literal("")),
-  applicableStage: z.enum(["BEFORE", "DURING", "FINAL", "ALL"] as const, {
+  applicableStage: z.enum(["COURSE", "QUIZ", "MIDTERM", "FINAL"] as const, {
     required_error: "请选择适用阶段",
   }),
   courseCodes: z
@@ -240,7 +227,7 @@ export default function ContributePage() {
       title: "",
       url: "",
       summary: "",
-      applicableStage: "ALL",
+      applicableStage: "COURSE",
       courseCodes: [],
       copyrightStatus: undefined,
       copyrightAgreed: false as unknown as true,

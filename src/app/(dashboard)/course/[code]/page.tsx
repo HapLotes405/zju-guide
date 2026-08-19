@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   BookOpen,
@@ -12,7 +12,6 @@ import {
   Target,
   Users,
   BookMarked,
-  FileText,
   ExternalLink,
   AlertCircle,
   RefreshCw,
@@ -23,12 +22,13 @@ import {
   HelpCircle,
   TrendingUp,
   Sparkles,
-  PenTool,
   Send,
   Loader2,
   Paperclip,
   Download,
   X,
+  ClipboardList,
+  FileQuestion,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -109,6 +109,22 @@ interface KnowledgeGraphNode {
   children?: KnowledgeGraphNode[];
 }
 
+interface ResourceData {
+  id: string;
+  title: string;
+  type: string;
+  url: string | null;
+  summary: string | null;
+  applicableStage: string | null;
+  submitterName: string;
+  createdAt: string;
+  filePath: string | null;
+  fileName: string | null;
+  fileSize: number | null;
+}
+
+type StageKey = "COURSE" | "QUIZ" | "MIDTERM" | "FINAL";
+
 // ─── Mock Data (teachers now fetched from API) ────────────
 
 const MOCK_MISCONCEPTIONS = [
@@ -117,37 +133,16 @@ const MOCK_MISCONCEPTIONS = [
   "不要等到期末才开始复习，平时作业和实验的积累很重要。",
 ];
 
-const MOCK_PREVIEW_POINTS = [
-  "微积分 / 线性代数 基础（大一内容）",
-  "基础化学或物理相关概念",
-  "实验报告撰写规范",
-];
-
-const MOCK_PREVIEW_MATERIALS = [
-  { title: "教材预习：第1-3章", url: "#" },
-  { title: "MIT OCW 相关课程视频", url: "#" },
-  { title: "往年学长笔记", url: "#" },
-];
-
-const MOCK_HOMEWORK_RATIO = "平时作业 40% + 期中 20% + 期末 40%";
-const MOCK_ATTENDANCE = "课堂签到（学习通 / 钉钉）";
-const MOCK_WEEKLY_RHYTHM = [
-  { week: "第1-4周", focus: "基础概念与数学工具" },
-  { week: "第5-8周", focus: "核心理论深入" },
-  { week: "第9-12周", focus: "实验与项目实践" },
-  { week: "第13-16周", focus: "综合复习与拓展" },
-];
-
 // ─── Sub-components ──────────────────────────────────────
 
 const COURSE_SECTION_IDS = [
   "identity",
   "why",
-  "preview",
-  "during",
+  "course",
+  "quiz",
+  "midterm",
   "final",
   "teachers",
-  "resources",
   "graph",
 ] as const;
 
@@ -349,6 +344,30 @@ export default function CourseDetailPage() {
     queryFn: () => api.get<TeacherData[]>(`/api/courses/${code}/teachers`),
     enabled: !!code,
   });
+
+  // Resources query — 按学习进度分为四格展示
+  const { data: resources = [] } = useQuery({
+    queryKey: ["course-resources", code],
+    queryFn: () => api.get<ResourceData[]>(`/api/courses/${code}/resources`),
+    enabled: !!code,
+  });
+
+  // 按适用阶段分组；未知/null 阶段兜底归入「平时学习」
+  const resourcesByStage = useMemo(() => {
+    const groups: Record<StageKey, ResourceData[]> = {
+      COURSE: [],
+      QUIZ: [],
+      MIDTERM: [],
+      FINAL: [],
+    };
+    for (const r of resources) {
+      const key = r.applicableStage as StageKey | null;
+      // Object.hasOwn 防止原型链上的键（如 "constructor"/"toString"）被误判为合法阶段导致崩溃
+      const stage: StageKey = key && Object.hasOwn(groups, key) ? key : "COURSE";
+      groups[stage].push(r);
+    }
+    return groups;
+  }, [resources]);
 
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     () => new Set(),
@@ -677,127 +696,75 @@ export default function CourseDetailPage() {
           </div>
         </CourseSectionCard>
 
-        {/* 3. 课前预习 */}
+        {/* 3. 平时学习 */}
         <CourseSectionCard
-          id="preview"
+          id="course"
           icon={BookMarked}
-          title="课前预习"
-          expanded={expandedSections.has("preview")}
+          title="平时学习"
+          expanded={expandedSections.has("course")}
           onToggle={toggleSection}
         >
-          <div className="space-y-4">
-            {/* Preview knowledge points */}
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                预习知识点
-              </h3>
-              <ul className="space-y-1.5">
-                {MOCK_PREVIEW_POINTS.map((p, i) => (
-                  <li
-                    key={i}
-                    className="flex items-center gap-2 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-800"
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5 text-blue-500" />
-                    {p}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Recommended materials */}
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                推荐资料
-              </h3>
-              <div className="space-y-1.5">
-                {MOCK_PREVIEW_MATERIALS.map((m, i) => (
-                  <a
-                    key={i}
-                    href={m.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-blue-600 transition hover:bg-blue-50"
-                  >
-                    <FileText className="h-4 w-4" />
-                    {m.title}
-                  </a>
-                ))}
-              </div>
-            </div>
-
-            {/* Estimated time */}
-            <div className="flex items-center gap-3 rounded-lg bg-slate-50 p-3">
-              <Clock className="h-5 w-5 text-slate-400" />
-              <span className="text-sm text-slate-600">
-                预计耗时：约 <strong>10-15 小时</strong>
-              </span>
-            </div>
-          </div>
+          <ResourceCardContent
+            courseCode={course.code}
+            stage="COURSE"
+            resources={resourcesByStage.COURSE}
+            onExpand={() => ensureExpanded("course")}
+          />
         </CourseSectionCard>
 
-        {/* 4. 课中跟课 */}
+        {/* 4. 小测 */}
         <CourseSectionCard
-          id="during"
-          icon={PenTool}
-          title="课中跟课"
-          expanded={expandedSections.has("during")}
+          id="quiz"
+          icon={FileQuestion}
+          title="小测"
+          expanded={expandedSections.has("quiz")}
           onToggle={toggleSection}
         >
-          <div className="space-y-4">
-            {/* Weekly rhythm */}
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                周节奏
-              </h3>
-              <div className="space-y-1.5">
-                {MOCK_WEEKLY_RHYTHM.map((w, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-3 rounded-md border border-slate-200 px-4 py-2.5"
-                  >
-                    <span className="whitespace-nowrap rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
-                      {w.week}
-                    </span>
-                    <span className="text-sm text-slate-600">{w.focus}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Homework ratio */}
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                作业占比
-              </h3>
-              <div className="rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
-                {MOCK_HOMEWORK_RATIO}
-              </div>
-            </div>
-
-            {/* Attendance */}
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                签到方式
-              </h3>
-              <div className="rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
-                {MOCK_ATTENDANCE}
-              </div>
-            </div>
-          </div>
+          <ResourceCardContent
+            courseCode={course.code}
+            stage="QUIZ"
+            resources={resourcesByStage.QUIZ}
+            onExpand={() => ensureExpanded("quiz")}
+          />
         </CourseSectionCard>
 
-        {/* 5. 期末复习 */}
+        {/* 5. 期中 */}
+        <CourseSectionCard
+          id="midterm"
+          icon={ClipboardList}
+          title="期中"
+          expanded={expandedSections.has("midterm")}
+          onToggle={toggleSection}
+        >
+          <ResourceCardContent
+            courseCode={course.code}
+            stage="MIDTERM"
+            resources={resourcesByStage.MIDTERM}
+            onExpand={() => ensureExpanded("midterm")}
+          />
+        </CourseSectionCard>
+
+        {/* 6. 期末（跨两列：复习路线 + 期末资源） */}
         <CourseSectionCard
           id="final"
           icon={Target}
-          title="期末复习"
+          title="期末"
+          featured
           expanded={expandedSections.has("final")}
           onToggle={toggleSection}
         >
-          <ExamPrepSection courseCode={course.code} onExpand={() => ensureExpanded("final")} />
+          <div className="space-y-5">
+            <ExamPrepSection courseCode={course.code} onExpand={() => ensureExpanded("final")} />
+            <ResourceCardContent
+              courseCode={course.code}
+              stage="FINAL"
+              resources={resourcesByStage.FINAL}
+              onExpand={() => ensureExpanded("final")}
+            />
+          </div>
         </CourseSectionCard>
 
-        {/* 6. 老师评价 */}
+        {/* 7. 老师评价 */}
         <CourseSectionCard
           id="teachers"
           icon={Users}
@@ -917,17 +884,6 @@ export default function CourseDetailPage() {
           </div>
         </CourseSectionCard>
 
-        {/* 7. 资源区 */}
-        <CourseSectionCard
-          id="resources"
-          icon={FileText}
-          title="资源区"
-          expanded={expandedSections.has("resources")}
-          onToggle={toggleSection}
-        >
-          <ResourceSection courseCode={course.code} courseName={course.name} onExpand={() => ensureExpanded("resources")} />
-        </CourseSectionCard>
-
         {/* 8. 图谱区 */}
         <CourseSectionCard
           id="graph"
@@ -1014,54 +970,41 @@ export default function CourseDetailPage() {
           </div>
         </CourseSectionCard>
       </div>
+
+      {/* 跳转 98 */}
+      <div className="mt-5">
+        <CC98JumpBox courseName={course.name} />
+      </div>
     </main>
   );
 }
 
-// ─── 资源区子组件 ──────────────────────────────
-function ResourceSection({
+// ─── 资源卡内容（按适用阶段展示） ──────────────────────────
+function ResourceCardContent({
   courseCode,
-  courseName,
+  stage,
+  resources,
   onExpand,
 }: {
   courseCode: string;
-  courseName: string;
+  stage: string;
+  resources: ResourceData[];
   onExpand: () => void;
 }) {
   const { user } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const canContribute = user?.role === "CONTRIBUTOR" || user?.role === "ADMIN";
-  const { data: resources = [], isLoading, isError } = useQuery({
-    queryKey: ["course-resources", courseCode],
-    queryFn: () =>
-      api.get<{ id: string; title: string; type: string; url: string | null; summary: string | null; applicableStage: string | null; submitterName: string; createdAt: string; filePath: string | null; fileName: string | null; fileSize: number | null }[]>(
-        `/api/courses/${courseCode}/resources`,
-      ),
-  });
 
   return (
     <div className="space-y-3">
-      {/* CC98 Jump */}
-      <a
-        href={buildCC98SearchUrl(courseName)}
-        target="_blank" rel="noopener noreferrer"
-        className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-4 py-4 transition hover:bg-blue-100">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-white">
-            <ExternalLink className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-blue-800">在 CC98 搜索「{courseName}」</p>
-            <p className="text-xs text-blue-500">查看论坛讨论、真题回忆、经验分享</p>
-          </div>
-        </div>
-        <ChevronDown className="h-5 w-5 -rotate-90 text-blue-400" />
-      </a>
-
-      {/* 投稿窗口：审核通过后展示在下方列表；仅贡献者及以上可见（VISITOR 提交会被服务端 403） */}
+      {/* 投稿窗口：审核通过后展示在本格；仅贡献者及以上可见（VISITOR 提交会被服务端 403） */}
       {canContribute ? (
         showForm ? (
-          <ContributeForm courseCode={courseCode} onClose={() => setShowForm(false)} />
+          <ContributeForm
+            courseCode={courseCode}
+            defaultStage={stage}
+            onClose={() => setShowForm(false)}
+          />
         ) : (
           <button
             type="button"
@@ -1072,7 +1015,7 @@ function ResourceSection({
             className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-blue-300 bg-blue-50/50 px-4 py-3 text-sm font-medium text-blue-600 transition hover:bg-blue-100"
           >
             <Send className="h-4 w-4" />
-            投稿资源（审核通过后展示）
+            投稿{APPLICABLE_STAGE_LABELS[stage] ?? "本阶段"}资源（审核通过后展示）
           </button>
         )
       ) : (
@@ -1083,64 +1026,90 @@ function ResourceSection({
         </div>
       )}
 
-      {/* Approved resources */}
-      {isLoading && <div className="py-4 text-center text-sm text-slate-400">加载中...</div>}
-
-      {isError && <div className="py-4 text-center text-sm text-red-500">资源加载失败</div>}
-
-      {!isLoading && !isError && resources.length === 0 && (
+      {/* 本阶段已审核资源 */}
+      {resources.length === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-200 px-4 py-6 text-center">
           <BookMarked className="mx-auto mb-2 h-6 w-6 text-slate-300" />
-          <p className="text-sm text-slate-400">暂无已审核资源，欢迎投稿分享</p>
+          <p className="text-sm text-slate-400">暂无该阶段资源，欢迎投稿分享</p>
         </div>
+      ) : (
+        resources.map((r) => <ResourceItem key={r.id} resource={r} />)
       )}
-
-      {resources.map((r) => (
-        <div key={r.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-2 flex items-center gap-2">
-            <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-700">
-              ✅ 已审核
-            </span>
-            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">
-              {RESOURCE_TYPE_LABELS[r.type] ?? r.type}
-            </span>
-            {r.applicableStage && (
-              <span className="rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-600">
-                {APPLICABLE_STAGE_LABELS[r.applicableStage] ?? r.applicableStage}
-              </span>
-            )}
-          </div>
-          <h4 className="font-medium text-slate-900">{r.title}</h4>
-          {r.summary && <p className="mt-1 text-sm text-slate-500">{r.summary}</p>}
-          <div className="mt-2 flex items-center justify-between text-xs text-slate-400">
-            <span>贡献者：{r.submitterName} · {r.createdAt.slice(0, 10)}</span>
-            <div className="flex items-center gap-3">
-              {r.fileName && r.filePath && (
-                <a href={`/api/files/${r.filePath}`}
-                  className="flex items-center gap-1 text-blue-500 hover:underline">
-                  <Download className="h-3 w-3" />下载附件
-                </a>
-              )}
-              {r.url && (
-                <a href={r.url} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-blue-500 hover:underline">
-                  <ExternalLink className="h-3 w-3" />查看原文
-                </a>
-              )}
-            </div>
-          </div>
-        </div>
-      ))}
     </div>
   );
 }
 
-// ─── 资源投稿表单（课程页内嵌） ──────────────────────────
-function ContributeForm({ courseCode, onClose }: { courseCode: string; onClose: () => void }) {
+function ResourceItem({ resource: r }: { resource: ResourceData }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-700">
+          ✅ 已审核
+        </span>
+        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">
+          {RESOURCE_TYPE_LABELS[r.type] ?? r.type}
+        </span>
+      </div>
+      <h4 className="font-medium text-slate-900">{r.title}</h4>
+      {r.summary && <p className="mt-1 text-sm text-slate-500">{r.summary}</p>}
+      <div className="mt-2 flex items-center justify-between text-xs text-slate-400">
+        <span>贡献者：{r.submitterName} · {r.createdAt.slice(0, 10)}</span>
+        <div className="flex items-center gap-3">
+          {r.fileName && r.filePath && (
+            <a href={`/api/files/${r.filePath}`} className="flex items-center gap-1 text-blue-500 hover:underline">
+              <Download className="h-3 w-3" />下载附件
+            </a>
+          )}
+          {r.url && (
+            <a href={r.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-500 hover:underline">
+              <ExternalLink className="h-3 w-3" />查看原文
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── 跳转 98（独立小框，置于页面底部） ──────────────────────
+function CC98JumpBox({ courseName }: { courseName: string }) {
+  return (
+    <a
+      href={buildCC98SearchUrl(courseName)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group flex items-center justify-between rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-5 py-4 transition hover:border-blue-300 hover:bg-blue-100"
+    >
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-white transition group-hover:bg-blue-700">
+          <ExternalLink className="h-5 w-5" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-blue-900">跳转 98</p>
+          <p className="text-xs text-blue-500">
+            在 CC98 搜索「{courseName}」— 论坛讨论、真题回忆、经验分享
+          </p>
+        </div>
+      </div>
+      <ChevronDown className="h-5 w-5 -rotate-90 text-blue-400 transition group-hover:translate-x-0.5" />
+    </a>
+  );
+}
+
+// ─── 资源投稿表单（课程页内嵌，默认适用阶段随所在卡片） ──────────────────────────
+function ContributeForm({
+  courseCode,
+  defaultStage,
+  onClose,
+}: {
+  courseCode: string;
+  defaultStage: string;
+  onClose: () => void;
+}) {
   const [title, setTitle] = useState("");
   const [type, setType] = useState("LECTURE_NOTE");
   const [url, setUrl] = useState("");
-  const [stage, setStage] = useState("ALL");
+  const [stage, setStage] = useState(defaultStage);
   const [summary, setSummary] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1163,7 +1132,9 @@ function ContributeForm({ courseCode, onClose }: { courseCode: string; onClose: 
       form.set("courseCodes", JSON.stringify([courseCode]));
       if (file) form.set("file", file);
       await api.postForm("/api/resources", form);
-      toast.success("已提交，审核通过后将展示在资源区");
+      toast.success(
+        `已提交，审核通过后将展示在「${APPLICABLE_STAGE_LABELS[stage] ?? "对应阶段"}」`,
+      );
       onClose();
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "提交失败，请稍后重试");

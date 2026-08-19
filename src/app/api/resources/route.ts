@@ -26,7 +26,8 @@ const VALID_COPYRIGHT_STATUSES: CopyrightStatus[] = [
   "UNKNOWN",
 ];
 
-const VALID_APPLICABLE_STAGES = ["BEFORE", "DURING", "FINAL", "ALL"];
+// 学习进度分类：平时学习 / 小测 / 期中 / 期末
+const VALID_APPLICABLE_STAGES = ["COURSE", "QUIZ", "MIDTERM", "FINAL"];
 
 interface CreateResourceBody {
   title?: string;

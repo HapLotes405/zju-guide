@@ -254,7 +254,7 @@ model Resource {
   mimeType        String?
   summary         String?
   copyrightStatus CopyrightStatus @default(UNKNOWN)
-  applicableStage String?         // "BEFORE" | "DURING" | "FINAL" | "ALL"
+  applicableStage String?         // "COURSE" | "QUIZ" | "MIDTERM" | "FINAL"（按学习进度分类）
   status          ResourceStatus  @default(DRAFT)
   submitterId     String
   createdAt       DateTime        @default(now())

@@ -9,10 +9,10 @@ export const RESOURCE_TYPE_LABELS: Record<string, string> = {
   OTHER: "其他",
 };
 
-// 适用阶段标签
+// 适用阶段标签 — 按学习进度分类：平时学习 / 小测 / 期中 / 期末
 export const APPLICABLE_STAGE_LABELS: Record<string, string> = {
-  BEFORE: "课前预习",
-  DURING: "课中跟课",
-  FINAL: "期末复习",
-  ALL: "全部阶段",
+  COURSE: "平时学习",
+  QUIZ: "小测",
+  MIDTERM: "期中",
+  FINAL: "期末",
 };

@@ -30,6 +30,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { api, ApiError } from "@/lib/api-client";
+import { RESOURCE_TYPE_LABELS, APPLICABLE_STAGE_LABELS } from "@/lib/constants";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -61,22 +62,7 @@ interface SubmissionsResponse {
 
 // ─── Constants ──────────────────────────────────────────────
 
-const TYPE_LABELS: Record<string, string> = {
-  EBOOK: "电子书/教材",
-  LECTURE_NOTE: "课堂笔记",
-  EXAM_RECALL: "真题回忆",
-  BLOG: "博客/经验帖",
-  CC98_POST: "CC98 帖子",
-  TOOL_TEMPLATE: "工具/模板",
-  OTHER: "其他",
-};
-
-const STAGE_LABELS: Record<string, string> = {
-  BEFORE: "课前预习",
-  DURING: "课中跟课",
-  FINAL: "期末复习",
-  ALL: "全部阶段",
-};
+// 资源类型 / 适用阶段标签统一从 @/lib/constants 导入，避免漂移
 
 function formatTime(iso: string): string {
   const d = new Date(iso);
@@ -255,7 +241,7 @@ function PendingRow({
       <div className="flex-1 min-w-0 space-y-1">
         <div className="flex items-start gap-2">
           <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-600">
-            {TYPE_LABELS[item.resource.type] ?? item.resource.type}
+            {RESOURCE_TYPE_LABELS[item.resource.type] ?? item.resource.type}
           </span>
           <p className="text-sm font-medium text-slate-800 truncate">
             {item.resource.title}
@@ -273,7 +259,7 @@ function PendingRow({
           </span>
           {item.resource.applicableStage && (
             <span className="rounded bg-blue-50 px-1.5 py-0.5 text-blue-600">
-              {STAGE_LABELS[item.resource.applicableStage] ?? item.resource.applicableStage}
+              {APPLICABLE_STAGE_LABELS[item.resource.applicableStage] ?? item.resource.applicableStage}
             </span>
           )}
         </div>
@@ -397,7 +383,7 @@ function ReviewedGroup({
                           : item.result ?? "已处理"}
                     </span>
                     <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">
-                      {TYPE_LABELS[item.resource.type] ?? item.resource.type}
+                      {RESOURCE_TYPE_LABELS[item.resource.type] ?? item.resource.type}
                     </span>
                     <span className="text-sm font-medium text-slate-700 truncate">
                       {item.resource.title}
