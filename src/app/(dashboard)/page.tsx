@@ -17,10 +17,17 @@ import {
 // ─── 类型 ────────────────────────────────────────
 interface CourseData {
   code: string; name: string; credits: number;
-  category: string; semester: string;
+  category: string | null; semester: string;
   department?: string;
   prerequisites: { code: string; name: string }[];
   dependents: { code: string; name: string }[];
+  // 培养方案关联（仅按 programVersionId 过滤时返回）——时间线板块按它分组
+  programCourses?: {
+    programVersionId: string;
+    suggestedSemester: number;
+    isCompulsory: boolean;
+    requirementGroup: { category: string | null; name: string | null } | null;
+  }[];
 }
 
 interface ProgramOption {
@@ -62,7 +69,11 @@ const GROUPS: CourseGroup[] = [
   { key: "personalized", label: "个性修读", icon: PersonalizedIcon, iconColor: "text-blue-600", bar: "bg-blue-500", dot: "bg-blue-500", border: "border-l-blue-500" },
 ];
 
-const SEMESTERS = ["大一上","大一下","大一暑","大二上","大二下","大二暑","大三上","大三下","大四上","大四下"];
+// 学期标签：下标 + 1 = ProgramCourse.suggestedSemester，为线性编号（交叉验证真实数据：
+// sem 3 对应文本学期"二(秋冬)"=大二上、sem 5 对应"三(秋冬)"=大三上、sem 8 对应"四(春夏)"=大四下、
+// 临床医学的 sem 9/10 对应"五(秋冬)/(春夏)"=大五上/下）。无暑学期插入；>10 的异常值（研究生课程 11/12）兜底「第N学期」。
+const SEMESTERS = ["大一上", "大一下", "大二上", "大二下", "大三上", "大三下", "大四上", "大四下", "大五上", "大五下"];
+const semesterLabel = (n: number) => SEMESTERS[n - 1] ?? `第${n}学期`;
 
 function ProgramCombobox({
   label,
@@ -199,9 +210,11 @@ function ProgramCombobox({
 
 // ─── 分类映射 ────────────────────────────────────
 function getCatKey(c: CourseData): string {
-  if (c.category.startsWith("module_")) return "major_module";
-  if (c.category === "major_practice") return "major_practice";
-  return c.category;
+  // category 在 schema 中可空（管理员导入课程可能不带），缺失时归入通识基础，避免 startsWith 崩溃
+  const cat = c.category ?? "gen_ed";
+  if (cat.startsWith("module_")) return "major_module";
+  if (cat === "major_practice") return "major_practice";
+  return cat;
 }
 
 // ─── 主页面 ──────────────────────────────────────
@@ -254,7 +267,7 @@ export default function DashboardPage() {
   const { data: allCourses = [], isLoading: coursesLoading, isError } = useQuery<CourseData[]>({
     queryKey: ["all-courses", appliedProgramIds],
     queryFn: () => {
-      const params = new URLSearchParams({ pageSize: "500" });
+      const params = new URLSearchParams({ pageSize: "2000" });
       for (const id of appliedProgramIds) params.append("programVersionId", id);
       return api.rawGet<{ data: CourseData[] }>(`/api/courses?${params.toString()}`).then((d) => d.data ?? []);
     },
@@ -279,6 +292,38 @@ export default function DashboardPage() {
       return ms && mf;
     });
   }, [allCourses, search, filter]);
+
+  // 主修方案 id：时间线按主修的培养方案学期为准
+  const mainProgramId = useMemo(
+    () => userPrograms?.find((p) => p.type === "MAJOR")?.programVersion.id ?? null,
+    [userPrograms],
+  );
+
+  // 学期 × 分类 二维聚合：Map<semester, Map<categoryKey, CourseData[]>>
+  // 学期取培养方案 suggestedSemester（主修优先，否则第一个）；分类优先用培养方案组，其次 Course.category 归一
+  const timelinePlan = useMemo(() => {
+    const plan = new Map<number, Map<string, CourseData[]>>();
+    const normCat = (raw: string | null | undefined): string | null => {
+      if (!raw) return null;
+      return raw.startsWith("module_") ? "major_module" : raw;
+    };
+    for (const c of filtered) {
+      const pcs = c.programCourses ?? [];
+      if (pcs.length === 0) continue; // 无培养方案关联的课程不进时间线
+      const pc =
+        (mainProgramId && pcs.find((p) => p.programVersionId === mainProgramId)) ||
+        pcs[0]!;
+      const sem = pc.suggestedSemester;
+      const catKey = normCat(pc.requirementGroup?.category) ?? getCatKey(c);
+      // 分类筛选对时间线按时间线自身的分类生效（可能与 course.category 不同）
+      if (filter !== "all" && catKey !== filter) continue;
+      if (!plan.has(sem)) plan.set(sem, new Map());
+      const byCat = plan.get(sem)!;
+      if (!byCat.has(catKey)) byCat.set(catKey, []);
+      byCat.get(catKey)!.push(c);
+    }
+    return plan;
+  }, [filtered, mainProgramId, filter]);
 
   const isHL = (c: CourseData) => {
     if (!hovered || hovered === c.code) return true;
@@ -527,20 +572,61 @@ export default function DashboardPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          {SEMESTERS.map((sem) => {
-            const items = filtered.filter((c) => c.semester === sem);
-            if (items.length === 0) return null;
+          {timelinePlan.size === 0 && (
+            <p className="py-10 text-center text-sm text-slate-400">
+              当前条件下暂无课程（未关联培养方案的课程不出现在时间线）
+            </p>
+          )}
+          {[...timelinePlan.keys()].sort((a, b) => a - b).map((sem) => {
+            const byCat = timelinePlan.get(sem)!;
             return (
               <div key={sem} className="relative border-l-2 border-slate-200 pl-6">
                 <div className="absolute -left-[7px] top-1.5 flex h-3 w-3 items-center justify-center rounded-full border-2 border-blue-400 bg-white" />
-                <h4 className="mb-3 text-sm font-bold text-slate-700">{sem}</h4>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {items.map((c) => (
-                    <Card key={c.code} c={c} passed={passed.has(c.code)} hl={isHL(c)}
-                      onClick={() => router.push(`/course/${c.code}`)}
-                      onToggle={() => toggle(c.code)}
-                      onEnter={() => setHovered(c.code)} onLeave={() => setHovered(null)} />
-                  ))}
+                <h4 className="mb-3 text-sm font-bold text-slate-700">{semesterLabel(sem)}</h4>
+                <div className="space-y-4">
+                  {/* 分类块按 GROUPS 固定顺序渲染，与修读导图一致 */}
+                  {GROUPS.map((g) => {
+                    const items = byCat.get(g.key);
+                    if (!items || items.length === 0) return null;
+                    const GroupIcon = g.icon;
+                    return (
+                      <div key={g.key} className={`border-l-4 ${g.border} pl-3`}>
+                        <h5 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                          <GroupIcon className={`h-4 w-4 ${g.iconColor}`} />
+                          {g.label}
+                          <span className="text-xs font-normal text-slate-400">({items.length}门)</span>
+                        </h5>
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                          {items.map((c) => (
+                            <Card key={c.code} c={c} passed={passed.has(c.code)} hl={isHL(c)}
+                              onClick={() => router.push(`/course/${c.code}`)}
+                              onToggle={() => toggle(c.code)}
+                              onEnter={() => setHovered(c.code)} onLeave={() => setHovered(null)} />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {/* GROUPS 之外的分类 key 兜底展示（不丢课程） */}
+                  {[...byCat.entries()]
+                    .filter(([k]) => !GROUPS.some((g) => g.key === k))
+                    .map(([catKey, items]) => (
+                      <div key={catKey} className="border-l-4 border-l-slate-300 pl-3">
+                        <h5 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                          <GeneralEducationIcon className="h-4 w-4 text-slate-500" />
+                          {catKey}
+                          <span className="text-xs font-normal text-slate-400">({items.length}门)</span>
+                        </h5>
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                          {items.map((c) => (
+                            <Card key={c.code} c={c} passed={passed.has(c.code)} hl={isHL(c)}
+                              onClick={() => router.push(`/course/${c.code}`)}
+                              onToggle={() => toggle(c.code)}
+                              onEnter={() => setHovered(c.code)} onLeave={() => setHovered(null)} />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                 </div>
               </div>
             );
@@ -567,7 +653,8 @@ function Card({ c, passed, hl, onClick, onToggle, onEnter, onLeave }: {
     major_module: "border-emerald-200 bg-emerald-50/30 text-emerald-700",
     personalized: "border-blue-200 bg-blue-50/30 text-blue-700",
   };
-  const catKey = c.category.startsWith("module_") ? "major_module" : c.category;
+  const rawCat = c.category ?? "";
+  const catKey = rawCat.startsWith("module_") ? "major_module" : rawCat;
   const cc = catColors[catKey] ?? "border-slate-200 bg-white";
 
   return (

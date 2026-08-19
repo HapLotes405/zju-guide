@@ -33,7 +33,11 @@ export function ExamPrepSection({
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["exam-prep", courseCode],
     queryFn: () =>
-      api.get<ExamPrepData | null>(`/api/courses/${courseCode}/exam-prep`),
+      // api.get 对 {data:null} 响应会经 ?? 变成 undefined，React Query 视为非法；
+      // 归一为 null，让"无备考数据"走正常空态（startEdit 也靠 data == null 拦截）
+      api
+        .get<ExamPrepData | null>(`/api/courses/${courseCode}/exam-prep`)
+        .then((d) => d ?? null),
   });
 
   const [editing, setEditing] = useState(false);

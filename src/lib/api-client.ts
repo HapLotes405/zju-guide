@@ -149,8 +149,36 @@ export const api = {
   rawGet<T = unknown>(url: string, init?: Omit<RequestInit, "method" | "body">): Promise<T> {
     const token = getToken();
     const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-    return fetch(url, { ...init, method: "GET", headers })
-      .then((r) => r.json() as Promise<T>);
+    return fetch(url, { ...init, method: "GET", headers }).then(async (r) => {
+      // 与 request() 相同的错误处理：非 2xx 与 {error} 包均抛 ApiError，让 useQuery 进入 isError
+      let json: ApiEnvelope<T> | null = null;
+      if ((r.headers.get("content-type") ?? "").includes("application/json")) {
+        try {
+          json = (await r.json()) as ApiEnvelope<T>;
+        } catch {
+          // 非 JSON body，按空处理
+        }
+      }
+      if (!r.ok) {
+        if (r.status === 401) {
+          clearTokens();
+          if (typeof window !== "undefined") {
+            setTimeout(() => {
+              window.location.href = "/login";
+            }, 100);
+          }
+        }
+        throw new ApiError(
+          json?.error?.code ?? "HTTP_ERROR",
+          json?.error?.message ?? `Request failed with status ${r.status}`,
+          r.status,
+        );
+      }
+      if (json?.error) {
+        throw new ApiError(json.error.code, json.error.message, r.status);
+      }
+      return (json ?? {}) as T;
+    });
   },
 
   post<T = unknown>(url: string, body?: unknown, init?: Omit<RequestInit, "method" | "body">): Promise<T> {

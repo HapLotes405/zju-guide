@@ -23,6 +23,8 @@ build
 *.db-wal
 *.db-shm
 *.db.bak-*
+*.dump
+*.dump.*
 
 # Prisma 迁移文件需纳入版本控制（`*.sql` 规则误吞，见下方「备份」区重新包含）
 
