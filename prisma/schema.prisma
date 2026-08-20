@@ -146,6 +146,10 @@ model ProgramVersion {
   publishedAt  DateTime @default(now())
   createdAt    DateTime @default(now())
 
+  // LLM 洗出来的完整递归树培养方案文档（program-data/*.json 原样入库）
+  // 扁平 requirementGroups/programCourses 是旧导入的降维表示，新结构以这份为准
+  programJson Json?
+
   userPrograms      UserProgram[]
   requirementGroups RequirementGroup[]
   programCourses    ProgramCourse[]

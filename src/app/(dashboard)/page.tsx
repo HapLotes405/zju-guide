@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useMemo, type ComponentType, type SVGProps
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
-import { Search, Check, Compass, ChevronDown, ChevronRight, Plus, X } from "lucide-react";
+import { Search, Check, Compass, ChevronDown, ChevronRight, Plus, X, ExternalLink } from "lucide-react";
 import {
   GeneralEducationIcon,
   MajorFoundationIcon,
@@ -94,6 +94,7 @@ function ProgramCombobox({
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
   const hasExactSelection = options.some((program) => program.majorName === value);
   const filteredOptions = value && !hasExactSelection
     ? options.filter((program) =>
@@ -170,16 +171,24 @@ function ProgramCombobox({
                 const optionValue = program.majorName;
                 const selected = optionValue === value;
                 return (
-                  <button
+                  <div
                     key={program.id}
-                    type="button"
                     role="option"
                     aria-selected={selected}
+                    tabIndex={0}
                     onClick={() => {
                       onChange(optionValue);
                       setOpen(false);
                     }}
-                    className={`relative flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm transition ${
+                    onKeyDown={(e) => {
+                      // 键盘可选择（Enter / Space），与点击行为一致
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onChange(optionValue);
+                        setOpen(false);
+                      }
+                    }}
+                    className={`relative flex w-full cursor-pointer items-center gap-2.5 px-3 py-2.5 text-left text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                       selected
                         ? "bg-blue-50 font-semibold text-blue-800"
                         : "text-slate-700 hover:bg-slate-50"
@@ -194,8 +203,19 @@ function ProgramCombobox({
                     >
                       <Check className="h-3 w-3" />
                     </span>
-                    <span>{optionValue}</span>
-                  </button>
+                    <span className="flex-1 truncate">{optionValue}</span>
+                    <button
+                      type="button"
+                      aria-label="查看该培养方案"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/program/${program.id}`);
+                      }}
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-400 transition hover:bg-blue-50 hover:text-blue-700"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 );
               })
             ) : (
@@ -250,6 +270,16 @@ export default function DashboardPage() {
   const appliedProgramIds = useMemo(
     () => (userPrograms ?? []).map((program) => program.programVersion.id),
     [userPrograms],
+  );
+  // 当前输入匹配到的培养方案（用于"查看培养方案"入口，未匹配则不显示）
+  const matchedMajor = useMemo(
+    () =>
+      selectedYear == null
+        ? null
+        : (programOptions.find(
+            (program) => program.year === selectedYear && program.majorName === majorInput,
+          ) ?? null),
+    [programOptions, selectedYear, majorInput],
   );
 
   useEffect(() => {
@@ -392,14 +422,25 @@ export default function DashboardPage() {
               <h2 className="text-base font-bold text-slate-900">专业组合</h2>
               <p className="mt-1 text-xs text-slate-500">选择一个主修专业，可添加至多三个辅修专业</p>
             </div>
-            <button
-              type="button"
-              onClick={applyProgramSelection}
-              disabled={updatePrograms.isPending || !majorInput || !selectedYear}
-              className="geometry-button min-h-9 px-4 text-sm font-semibold text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              {updatePrograms.isPending ? "应用中..." : "应用专业组合"}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {matchedMajor && (
+                <button
+                  type="button"
+                  onClick={() => router.push(`/program/${matchedMajor.id}`)}
+                  className="min-h-9 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+                >
+                  查看培养方案
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={applyProgramSelection}
+                disabled={updatePrograms.isPending || !majorInput || !selectedYear}
+                className="geometry-button min-h-9 px-4 text-sm font-semibold text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {updatePrograms.isPending ? "应用中..." : "应用专业组合"}
+              </button>
+            </div>
           </div>
 
           {/* 第一步：选择年级 */}

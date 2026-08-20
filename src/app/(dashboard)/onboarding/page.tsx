@@ -8,6 +8,7 @@ import { GraduationCap, ArrowRight, Search } from "lucide-react";
 
 interface ProgramData {
   years: { year: number; majors: string[] }[];
+  options: { id: string; majorName: string; year: number; totalCredits: number }[];
   total: number;
 }
 
@@ -37,6 +38,10 @@ export default function OnboardingPage() {
   const filteredMajors = majorSearch
     ? selectedYearMajors.filter((m) => m.toLowerCase().includes(majorSearch.toLowerCase()))
     : selectedYearMajors;
+  // 当前 年级+专业 匹配到的培养方案（用于"先看看培养方案"入口，未匹配则不显示）
+  const selectedOption = year && major
+    ? (data?.options ?? []).find((o) => o.year === year && o.majorName === major)
+    : undefined;
 
   if (isLoading) {
     return (
@@ -139,6 +144,18 @@ export default function OnboardingPage() {
           {selectMutation.isPending ? "加载中..." : `确认：${year}级 ${major}`}
           <ArrowRight className="h-5 w-5" />
         </button>
+      )}
+
+      {year && major && selectedOption && (
+        <p className="text-center">
+          <button
+            type="button"
+            onClick={() => router.push(`/program/${selectedOption.id}`)}
+            className="text-xs font-medium text-blue-600 transition hover:text-blue-700"
+          >
+            先看看培养方案 →
+          </button>
+        </p>
       )}
 
       {selectMutation.error && (
