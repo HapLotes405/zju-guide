@@ -30,6 +30,7 @@ import {
   type MinorTierView,
   type ModuleGroup,
   type ProgramDocument,
+  type ProgramVersionHeader,
   type SelectionType,
   type SemesterCourseItem,
   SELECTION_LABELS,
@@ -115,11 +116,15 @@ export function ProgramDocumentView({
   const [activeTab, setActiveTab] = useState<TabKey>("semester");
   // 本地「已修」课程集合：点击进度板课程 chip 模拟勾选
   const [passed, setPassed] = useState<Set<string>>(() => new Set());
+  // 辅修卡展开态提升到本层：切走「辅修方案」Tab 时 MinorPane 会卸载，
+  // 若不提升，用户切回后所有已展开的卡会收起、需重新逐个展开
+  const [expandedMinors, setExpandedMinors] = useState<Set<string>>(() => new Set());
 
   // 切换方案（id 变化）时重置本地交互状态
   useEffect(() => {
     setActiveTab("semester");
     setPassed(new Set());
+    setExpandedMinors(new Set());
   }, [id]);
 
   const toggle = (code: string) =>
@@ -221,8 +226,10 @@ export function ProgramDocumentView({
 
   return (
     <div className="space-y-5">
-      {/* ── 头部卡（hideHeader 时跳过，如嵌套展示的辅修完整方案） ── */}
-      {!hideHeader && (
+      {/* ── 头部卡：完整版默认；hideHeader（嵌套展示辅修完整方案）时降级为摘要 chips ── */}
+      {hideHeader ? (
+        <SummaryChips header={header} />
+      ) : (
       <div className="border border-slate-200 bg-white p-6 lg:p-8">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span className="course-code rounded-md bg-blue-100 px-2.5 py-0.5 font-semibold text-blue-700">
@@ -265,43 +272,7 @@ export function ProgramDocumentView({
           {header.semesterSystem && <span>学期制：{header.semesterSystem}</span>}
         </div>
 
-        {/* 核心课程（无则隐藏） */}
-        {(header.coreCourses ?? []).length > 0 && (
-          <div className="mt-5">
-            <span className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-400">
-              核心课程
-            </span>
-            <div className="flex flex-wrap gap-2">
-              {(header.coreCourses ?? []).map((c) => (
-                <span
-                  key={c}
-                  className="rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700"
-                >
-                  {c}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 全英文授课课程（无则隐藏） */}
-        {(header.englishCourses ?? []).length > 0 && (
-          <div className="mt-3">
-            <span className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-400">
-              全英文授课
-            </span>
-            <div className="flex flex-wrap gap-2">
-              {(header.englishCourses ?? []).map((c) => (
-                <span
-                  key={c}
-                  className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600"
-                >
-                  {c}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
+        <SummaryChips header={header} />
       </div>
       )}
 
@@ -341,7 +312,20 @@ export function ProgramDocumentView({
       )}
       {activeTab === "activities" && <ActivitiesPane document={programDoc} />}
       {activeTab === "minor" && (
-        <MinorPane document={programDoc} onOpen={openCourse} appliedMinors={appliedMinors} />
+        <MinorPane
+          document={programDoc}
+          onOpen={openCourse}
+          appliedMinors={appliedMinors}
+          expandedMinors={expandedMinors}
+          onToggleExpand={(minorId) =>
+            setExpandedMinors((current) => {
+              const next = new Set(current);
+              if (next.has(minorId)) next.delete(minorId);
+              else next.add(minorId);
+              return next;
+            })
+          }
+        />
       )}
     </div>
   );
@@ -750,15 +734,67 @@ function ActivitiesPane({ document }: { document: ProgramDocument }) {
   );
 }
 
+// 核心课程 / 全英文授课摘要 chips：
+// 完整头部卡内嵌使用；hideHeader（嵌套展示辅修完整方案）时降级为紧凑卡片单独展示，
+// 因为 AppliedMinorCard 卡头只含专业名/年级/总学分，缺这两块概览
+function SummaryChips({ header }: { header: ProgramVersionHeader }) {
+  const hasCore = (header.coreCourses ?? []).length > 0;
+  const hasEnglish = (header.englishCourses ?? []).length > 0;
+  if (!hasCore && !hasEnglish) return null;
+  return (
+    <div className="mt-5">
+      {hasCore && (
+        <div>
+          <span className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-400">
+            核心课程
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {(header.coreCourses ?? []).map((c) => (
+              <span
+                key={c}
+                className="rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700"
+              >
+                {c}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      {hasEnglish && (
+        <div className="mt-3">
+          <span className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-400">
+            全英文授课
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {(header.englishCourses ?? []).map((c) => (
+              <span
+                key={c}
+                className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600"
+              >
+                {c}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── 辅修方案 ──────────────────────────────────
 function MinorPane({
   document,
   onOpen,
   appliedMinors,
+  expandedMinors,
+  onToggleExpand,
 }: {
   document: ProgramDocument;
   onOpen: (code: string) => void;
   appliedMinors?: { id: string; majorName: string; year: number }[];
+  /** 已展开完整方案的辅修卡 id 集合（本层状态，切 Tab 卸载 MinorPane 后保留） */
+  expandedMinors: ReadonlySet<string>;
+  onToggleExpand: (minorId: string) => void;
 }) {
   // 已应用辅修：按"我的辅修"逐张卡片展示目标专业的真实修读要求（与当前主修文档解耦）
   if (appliedMinors && appliedMinors.length > 0) {
@@ -771,7 +807,13 @@ function MinorPane({
           </h3>
         </header>
         {appliedMinors.map((minor) => (
-          <AppliedMinorCard key={minor.id} minor={minor} onOpen={onOpen} />
+          <AppliedMinorCard
+            key={minor.id}
+            minor={minor}
+            onOpen={onOpen}
+            expanded={expandedMinors.has(minor.id)}
+            onToggle={() => onToggleExpand(minor.id)}
+          />
         ))}
       </div>
     );
@@ -827,9 +869,14 @@ function MinorPane({
 function AppliedMinorCard({
   minor,
   onOpen,
+  expanded,
+  onToggle,
 }: {
   minor: { id: string; majorName: string; year: number };
   onOpen: (code: string) => void;
+  /** 是否已展开完整培养方案（受控自 ProgramDocumentView，切 Tab 后仍保留） */
+  expanded: boolean;
+  onToggle: () => void;
 }) {
   const {
     data: program,
@@ -842,9 +889,6 @@ function AppliedMinorCard({
     enabled: !!minor.id,
   });
 
-  // 卡内展开该辅修专业的完整培养方案（嵌套 ProgramDocumentView，复用同一查询缓存，不重复请求）
-  const [showFullPlan, setShowFullPlan] = useState(false);
-
   if (isLoading) {
     return (
       <section className="animate-pulse border border-slate-200 bg-white p-5">
@@ -853,6 +897,23 @@ function AppliedMinorCard({
           <div className="h-3 w-full rounded bg-slate-100" />
           <div className="h-3 w-2/3 rounded bg-slate-100" />
         </div>
+      </section>
+    );
+  }
+
+  // 缺 id（异常数据兜底）：enabled:false 的 query 不会触发加载/错误分支，需显式给中性提示，
+  // 否则会落入下方"加载失败 + 重新加载"误导文案（此时点重新加载也无法修复）
+  if (!minor.id) {
+    return (
+      <section className="border border-slate-200 bg-white p-5">
+        <h3 className="text-base font-bold text-slate-800">
+          {minor.majorName}
+          <span className="ml-1.5 text-sm font-normal text-slate-400">· {minor.year} 级</span>
+        </h3>
+        <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-400">
+          <AlertCircle className="h-4 w-4" />
+          该辅修缺少方案信息，暂时无法展示其修读要求。
+        </p>
       </section>
     );
   }
@@ -907,18 +968,22 @@ function AppliedMinorCard({
 
       <button
         type="button"
-        onClick={() => setShowFullPlan((v) => !v)}
-        aria-expanded={showFullPlan}
+        onClick={onToggle}
+        aria-expanded={expanded}
+        aria-controls={minor.id ? `minor-full-plan-${minor.id}` : undefined}
         className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 transition hover:text-blue-800"
       >
         <ChevronDown
-          className={`h-3.5 w-3.5 transition-transform ${showFullPlan ? "rotate-180" : ""}`}
+          className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-180" : ""}`}
         />
-        {showFullPlan ? "收起完整培养方案" : "查看完整培养方案"}
+        {expanded ? "收起完整培养方案" : "查看完整培养方案"}
       </button>
 
-      {showFullPlan && (
-        <div className="mt-4 border-t border-slate-100 pt-4">
+      {expanded && (
+        <div
+          id={minor.id ? `minor-full-plan-${minor.id}` : undefined}
+          className="mt-4 border-t border-slate-100 pt-4"
+        >
           <ProgramDocumentView programId={minor.id} hideMinorTab hideHeader />
         </div>
       )}
