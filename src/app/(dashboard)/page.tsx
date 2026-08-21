@@ -1,35 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState, useMemo, type ComponentType, type SVGProps } from "react";
-import { useRouter } from "next/navigation";
+// ─── 仪表盘首页 ──────────────────────────────────────
+// 专业组合选择器（年级 + 主修/至多三个辅修）+ 内嵌培养方案视图。
+// 培养方案视图由共享组件 ProgramDocumentView 渲染（其内部 GET /api/programs/[id]），
+// 这里只负责决定 programId：取当前应用的主修方案（GET /api/me/programs 的 MAJOR，
+// 或应用专业组合成功后 PUT /api/me/programs 返回数据里的 MAJOR）。
+
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
-import { Search, Check, Compass, ChevronDown, ChevronRight, Plus, X, ExternalLink } from "lucide-react";
-import {
-  GeneralEducationIcon,
-  MajorFoundationIcon,
-  MajorCoreIcon,
-  MajorModuleIcon,
-  PracticeIcon,
-  PersonalizedIcon,
-} from "@/components/course-category-icons";
+import { Check, ChevronDown, Plus, X } from "lucide-react";
+import { ProgramDocumentView } from "@/components/program-document-view";
 
 // ─── 类型 ────────────────────────────────────────
-interface CourseData {
-  code: string; name: string; credits: number;
-  category: string | null; semester: string;
-  department?: string;
-  prerequisites: { code: string; name: string }[];
-  dependents: { code: string; name: string }[];
-  // 培养方案关联（仅按 programVersionId 过滤时返回）——时间线板块按它分组
-  programCourses?: {
-    programVersionId: string;
-    suggestedSemester: number;
-    isCompulsory: boolean;
-    requirementGroup: { category: string | null; name: string | null } | null;
-  }[];
-}
-
 interface ProgramOption {
   id: string;
   majorName: string;
@@ -43,38 +26,16 @@ interface ProgramCatalog {
   total: number;
 }
 
-interface UserProgramData {
+interface UserProgram {
   id: string;
+  userId: string;
+  programVersionId: string;
   type: "MAJOR" | "MINOR";
+  isConfirmed: boolean;
   programVersion: ProgramOption;
 }
 
-// ─── 常亮 ────────────────────────────────────────
-interface CourseGroup {
-  key: string;
-  label: string;
-  bar: string;
-  dot: string;
-  border: string;
-  icon: ComponentType<SVGProps<SVGSVGElement>>;
-  iconColor: string;
-}
-
-const GROUPS: CourseGroup[] = [
-  { key: "gen_ed", label: "通识基础", icon: GeneralEducationIcon, iconColor: "text-blue-600", bar: "bg-blue-500", dot: "bg-blue-500", border: "border-l-blue-500" },
-  { key: "major_base", label: "专业基础", icon: MajorFoundationIcon, iconColor: "text-cyan-600", bar: "bg-cyan-500", dot: "bg-cyan-500", border: "border-l-cyan-500" },
-  { key: "major_core", label: "专业核心", icon: MajorCoreIcon, iconColor: "text-amber-600", bar: "bg-amber-500", dot: "bg-amber-500", border: "border-l-amber-500" },
-  { key: "major_practice", label: "实验实践", icon: PracticeIcon, iconColor: "text-teal-600", bar: "bg-teal-500", dot: "bg-teal-500", border: "border-l-teal-500" },
-  { key: "major_module", label: "专业模块选修", icon: MajorModuleIcon, iconColor: "text-emerald-600", bar: "bg-emerald-500", dot: "bg-emerald-500", border: "border-l-emerald-500" },
-  { key: "personalized", label: "个性修读", icon: PersonalizedIcon, iconColor: "text-blue-600", bar: "bg-blue-500", dot: "bg-blue-500", border: "border-l-blue-500" },
-];
-
-// 学期标签：下标 + 1 = ProgramCourse.suggestedSemester，为线性编号（交叉验证真实数据：
-// sem 3 对应文本学期"二(秋冬)"=大二上、sem 5 对应"三(秋冬)"=大三上、sem 8 对应"四(春夏)"=大四下、
-// 临床医学的 sem 9/10 对应"五(秋冬)/(春夏)"=大五上/下）。无暑学期插入；>10 的异常值（研究生课程 11/12）兜底「第N学期」。
-const SEMESTERS = ["大一上", "大一下", "大二上", "大二下", "大三上", "大三下", "大四上", "大四下", "大五上", "大五下"];
-const semesterLabel = (n: number) => SEMESTERS[n - 1] ?? `第${n}学期`;
-
+// ─── 专业组合选择器（主修 / 辅修下拉） ────────────────
 function ProgramCombobox({
   label,
   value,
@@ -94,7 +55,6 @@ function ProgramCombobox({
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
   const hasExactSelection = options.some((program) => program.majorName === value);
   const filteredOptions = value && !hasExactSelection
     ? options.filter((program) =>
@@ -204,17 +164,6 @@ function ProgramCombobox({
                       <Check className="h-3 w-3" />
                     </span>
                     <span className="flex-1 truncate">{optionValue}</span>
-                    <button
-                      type="button"
-                      aria-label="查看该培养方案"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        router.push(`/program/${program.id}`);
-                      }}
-                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-400 transition hover:bg-blue-50 hover:text-blue-700"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </button>
                   </div>
                 );
               })
@@ -228,36 +177,23 @@ function ProgramCombobox({
   );
 }
 
-// ─── 分类映射 ────────────────────────────────────
-function getCatKey(c: CourseData): string {
-  // category 在 schema 中可空（管理员导入课程可能不带），缺失时归入通识基础，避免 startsWith 崩溃
-  const cat = c.category ?? "gen_ed";
-  if (cat.startsWith("module_")) return "major_module";
-  if (cat === "major_practice") return "major_practice";
-  return cat;
-}
-
 // ─── 主页面 ──────────────────────────────────────
 export default function DashboardPage() {
-  const router = useRouter();
   const queryClient = useQueryClient();
-  const [passed, setPassed] = useState<Set<string>>(new Set());
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("all");
-  const [view, setView] = useState<"map" | "timeline">("map");
-  const [hovered, setHovered] = useState<string | null>(null);
   const [majorInput, setMajorInput] = useState("");
   const [minorInputs, setMinorInputs] = useState<string[]>([]);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [programsInitialized, setProgramsInitialized] = useState(false);
   const [programError, setProgramError] = useState("");
+  // 当前应用的主修培养方案 id：初始取 GET /api/me/programs 的 MAJOR，应用成功后取 PUT 返回的 MAJOR
+  const [appliedMajorId, setAppliedMajorId] = useState<string | null>(null);
 
   const { data: programCatalog } = useQuery<ProgramCatalog>({
     queryKey: ["programs"],
     queryFn: () => api.get("/api/programs"),
   });
 
-  const { data: userPrograms, isLoading: userProgramsLoading } = useQuery<UserProgramData[]>({
+  const { data: userPrograms, isLoading: userProgramsLoading } = useQuery<UserProgram[]>({
     queryKey: ["my-programs"],
     queryFn: () => api.get("/api/me/programs"),
   });
@@ -267,21 +203,8 @@ export default function DashboardPage() {
     () => (selectedYear == null ? [] : programOptions.filter((p) => p.year === selectedYear)),
     [programOptions, selectedYear],
   );
-  const appliedProgramIds = useMemo(
-    () => (userPrograms ?? []).map((program) => program.programVersion.id),
-    [userPrograms],
-  );
-  // 当前输入匹配到的培养方案（用于"查看培养方案"入口，未匹配则不显示）
-  const matchedMajor = useMemo(
-    () =>
-      selectedYear == null
-        ? null
-        : (programOptions.find(
-            (program) => program.year === selectedYear && program.majorName === majorInput,
-          ) ?? null),
-    [programOptions, selectedYear, majorInput],
-  );
 
+  // 初始化：从已保存方案回填年级/主修/辅修，并记录主修方案 id
   useEffect(() => {
     if (programsInitialized || !userPrograms) return;
     const major = userPrograms.find((program) => program.type === "MAJOR");
@@ -291,89 +214,25 @@ export default function DashboardPage() {
     setSelectedYear(major?.programVersion.year ?? null);
     setMajorInput(major?.programVersion.majorName ?? "");
     setMinorInputs(minors.map((program) => program.programVersion.majorName));
+    setAppliedMajorId(major?.programVersionId ?? null);
     setProgramsInitialized(true);
   }, [programsInitialized, userPrograms]);
 
-  const { data: allCourses = [], isLoading: coursesLoading, isError } = useQuery<CourseData[]>({
-    queryKey: ["all-courses", appliedProgramIds],
-    queryFn: () => {
-      const params = new URLSearchParams({ pageSize: "2000" });
-      for (const id of appliedProgramIds) params.append("programVersionId", id);
-      return api.rawGet<{ data: CourseData[] }>(`/api/courses?${params.toString()}`).then((d) => d.data ?? []);
-    },
-    enabled: appliedProgramIds.length > 0,
-  });
+  // 首帧兜底：query 已就绪但 effect 尚未运行时直接取已保存的 MAJOR，避免空态闪烁
+  const serverMajorId =
+    userPrograms?.find((p) => p.type === "MAJOR")?.programVersionId ?? null;
+  const currentMajorId = appliedMajorId ?? serverMajorId;
 
   const updatePrograms = useMutation({
     mutationFn: (selection: { majorProgramVersionId: string; minorProgramVersionIds: string[] }) =>
-      api.put<UserProgramData[]>("/api/me/programs", selection),
-    onSuccess: async () => {
+      api.put<UserProgram[]>("/api/me/programs", selection),
+    onSuccess: (programs) => {
       setProgramError("");
-      await queryClient.invalidateQueries({ queryKey: ["my-programs"] });
+      // 应用成功后立即用返回数据里的 MAJOR 更新内嵌培养方案视图
+      const major = programs.find((p) => p.type === "MAJOR");
+      if (major) setAppliedMajorId(major.programVersionId);
+      queryClient.invalidateQueries({ queryKey: ["my-programs"] });
     },
-  });
-
-  const isLoading = userProgramsLoading || coursesLoading;
-
-  const filtered = useMemo(() => {
-    return allCourses.filter((c) => {
-      const ms = !search || c.name.includes(search) || c.code.toLowerCase().includes(search.toLowerCase());
-      const mf = filter === "all" || getCatKey(c) === filter;
-      return ms && mf;
-    });
-  }, [allCourses, search, filter]);
-
-  // 主修方案 id：时间线按主修的培养方案学期为准
-  const mainProgramId = useMemo(
-    () => userPrograms?.find((p) => p.type === "MAJOR")?.programVersion.id ?? null,
-    [userPrograms],
-  );
-
-  // 学期 × 分类 二维聚合：Map<semester, Map<categoryKey, CourseData[]>>
-  // 学期取培养方案 suggestedSemester（主修优先，否则第一个）；分类优先用培养方案组，其次 Course.category 归一
-  const timelinePlan = useMemo(() => {
-    const plan = new Map<number, Map<string, CourseData[]>>();
-    const normCat = (raw: string | null | undefined): string | null => {
-      if (!raw) return null;
-      return raw.startsWith("module_") ? "major_module" : raw;
-    };
-    for (const c of filtered) {
-      const pcs = c.programCourses ?? [];
-      if (pcs.length === 0) continue; // 无培养方案关联的课程不进时间线
-      const pc =
-        (mainProgramId && pcs.find((p) => p.programVersionId === mainProgramId)) ||
-        pcs[0]!;
-      const sem = pc.suggestedSemester;
-      const catKey = normCat(pc.requirementGroup?.category) ?? getCatKey(c);
-      // 分类筛选对时间线按时间线自身的分类生效（可能与 course.category 不同）
-      if (filter !== "all" && catKey !== filter) continue;
-      if (!plan.has(sem)) plan.set(sem, new Map());
-      const byCat = plan.get(sem)!;
-      if (!byCat.has(catKey)) byCat.set(catKey, []);
-      byCat.get(catKey)!.push(c);
-    }
-    return plan;
-  }, [filtered, mainProgramId, filter]);
-
-  const isHL = (c: CourseData) => {
-    if (!hovered || hovered === c.code) return true;
-    return c.prerequisites?.some((p) => p.code === hovered) || c.dependents?.some((d) => d.code === hovered);
-  };
-
-  const credits = useMemo(() => {
-    const s: Record<string, { earned: number; total: number }> = {};
-    for (const g of GROUPS) s[g.key] = { earned: 0, total: 0 };
-    for (const c of allCourses) {
-      const k = getCatKey(c);
-      if (s[k]) { s[k]!.total += c.credits; if (passed.has(c.code)) s[k]!.earned += c.credits; }
-    }
-    const totalE = Object.values(s).reduce((a, v) => a + v.earned, 0);
-    const totalC = Object.values(s).reduce((a, v) => a + v.total, 0);
-    return { groups: s, totalEarned: totalE, totalCredits: totalC };
-  }, [allCourses, passed]);
-
-  const toggle = (code: string) => setPassed((p) => {
-    const n = new Set(p); n.has(code) ? n.delete(code) : n.add(code); return n;
   });
 
   const applyProgramSelection = () => {
@@ -414,313 +273,113 @@ export default function DashboardPage() {
 
   return (
     <div className="dashboard-home space-y-5">
-      {/* ── 学分总览条 ── */}
-      <div className="credit-overview border border-slate-200 bg-white p-5 lg:p-6">
-        <div className="program-selector mb-6 p-4 lg:p-5">
-          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-base font-bold text-slate-900">专业组合</h2>
-              <p className="mt-1 text-xs text-slate-500">选择一个主修专业，可添加至多三个辅修专业</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {matchedMajor && (
-                <button
-                  type="button"
-                  onClick={() => router.push(`/program/${matchedMajor.id}`)}
-                  className="min-h-9 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
-                >
-                  查看培养方案
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={applyProgramSelection}
-                disabled={updatePrograms.isPending || !majorInput || !selectedYear}
-                className="geometry-button min-h-9 px-4 text-sm font-semibold text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                {updatePrograms.isPending ? "应用中..." : "应用专业组合"}
-              </button>
-            </div>
+      {/* ── 专业组合选择器卡 ── */}
+      <div className="program-selector border border-slate-200 bg-white p-4 lg:p-5">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">专业组合</h2>
+            <p className="mt-1 text-xs text-slate-500">选择一个主修专业，可添加至多三个辅修专业</p>
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={applyProgramSelection}
+              disabled={updatePrograms.isPending || !majorInput || !selectedYear}
+              className="geometry-button min-h-9 px-4 text-sm font-semibold text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {updatePrograms.isPending ? "应用中..." : "应用专业组合"}
+            </button>
+          </div>
+        </div>
 
-          {/* 第一步：选择年级 */}
-          <div className="mb-4">
-            <span className="mb-1.5 block text-xs font-semibold text-slate-600">年级</span>
-            <div className="flex flex-wrap gap-2">
-              {(programCatalog?.years ?? []).map(({ year }) => (
-                <button
-                  key={year}
-                  type="button"
-                  onClick={() => {
-                    setSelectedYear(year);
-                    setMajorInput("");
-                    setMinorInputs([]);
-                    setProgramError("");
-                  }}
-                  className={`min-h-9 rounded-lg border px-4 text-sm font-medium transition ${
-                    selectedYear === year
-                      ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
-                  }`}
-                >
-                  {year} 级
-                </button>
-              ))}
-              {(programCatalog?.years ?? []).length === 0 && (
-                <p className="text-xs text-slate-400">暂无可选的培养方案</p>
-              )}
-            </div>
-            {selectedYear != null && (
-              <p className="mt-1.5 text-xs text-slate-400">{yearOptions.length} 个专业可用 · 先选年级再搜索匹配专业</p>
+        {/* 第一步：选择年级 */}
+        <div className="mb-4">
+          <span className="mb-1.5 block text-xs font-semibold text-slate-600">年级</span>
+          <div className="flex flex-wrap gap-2">
+            {(programCatalog?.years ?? []).map(({ year }) => (
+              <button
+                key={year}
+                type="button"
+                onClick={() => {
+                  setSelectedYear(year);
+                  setMajorInput("");
+                  setMinorInputs([]);
+                  setProgramError("");
+                }}
+                className={`min-h-9 rounded-lg border px-4 text-sm font-medium transition ${
+                  selectedYear === year
+                    ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                }`}
+              >
+                {year} 级
+              </button>
+            ))}
+            {(programCatalog?.years ?? []).length === 0 && (
+              <p className="text-xs text-slate-400">暂无可选的培养方案</p>
             )}
           </div>
+          {selectedYear != null && (
+            <p className="mt-1.5 text-xs text-slate-400">{yearOptions.length} 个专业可用 · 先选年级再搜索匹配专业</p>
+          )}
+        </div>
 
-          {/* 第二步：选择专业 */}
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {/* 第二步：选择专业 */}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <ProgramCombobox
+            label="主修专业"
+            value={majorInput}
+            options={selectedYear != null ? yearOptions : []}
+            placeholder={selectedYear != null ? "输入并搜索主修专业" : "请先选择年级"}
+            onChange={setMajorInput}
+            disabled={selectedYear == null}
+          />
+
+          {minorInputs.map((minor, index) => (
             <ProgramCombobox
-              label="主修专业"
-              value={majorInput}
+              key={index}
+              label={`辅修专业 ${index + 1}`}
+              value={minor}
               options={selectedYear != null ? yearOptions : []}
-              placeholder={selectedYear != null ? "输入并搜索主修专业" : "请先选择年级"}
-              onChange={setMajorInput}
+              placeholder={selectedYear != null ? "输入并搜索辅修专业" : "请先选择年级"}
+              onChange={(nextValue) => setMinorInputs((current) =>
+                current.map((currentValue, itemIndex) => itemIndex === index ? nextValue : currentValue)
+              )}
+              onRemove={() => setMinorInputs((current) =>
+                current.filter((_, itemIndex) => itemIndex !== index)
+              )}
               disabled={selectedYear == null}
             />
+          ))}
 
-            {minorInputs.map((minor, index) => (
-              <ProgramCombobox
-                key={index}
-                label={`辅修专业 ${index + 1}`}
-                value={minor}
-                options={selectedYear != null ? yearOptions : []}
-                placeholder={selectedYear != null ? "输入并搜索辅修专业" : "请先选择年级"}
-                onChange={(nextValue) => setMinorInputs((current) =>
-                  current.map((currentValue, itemIndex) => itemIndex === index ? nextValue : currentValue)
-                )}
-                onRemove={() => setMinorInputs((current) =>
-                  current.filter((_, itemIndex) => itemIndex !== index)
-                )}
-                disabled={selectedYear == null}
-              />
-            ))}
-
-            {minorInputs.length < 3 && (
-              <button
-                type="button"
-                onClick={() => setMinorInputs((current) => [...current, ""])}
-                disabled={selectedYear == null}
-                className="mt-[22px] flex h-10 items-center justify-center gap-1.5 border border-dashed border-blue-300 bg-blue-50/60 px-3 text-sm font-semibold text-blue-700 transition hover:border-blue-500 hover:bg-blue-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400"
-              >
-                <Plus className="h-4 w-4" />
-                添加辅修专业
-              </button>
-            )}
-          </div>
-
-          {(programError || updatePrograms.error) && (
-            <p className="mt-3 text-xs font-medium text-red-600">
-              {programError || (updatePrograms.error as Error).message}
-            </p>
-          )}
-        </div>
-
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="flex items-center gap-2.5 text-sm font-semibold text-slate-800">
-            <Compass className="h-5 w-5 text-blue-600" />毕业学分进度
-          </h2>
-          <span className="text-sm font-bold tabular-nums text-blue-700">
-            {credits.totalEarned.toFixed(1)} / {credits.totalCredits.toFixed(1)}
-          </span>
-        </div>
-        <div className="mb-5 h-1.5 overflow-hidden bg-slate-100">
-          <div className="h-full bg-blue-600 transition-all"
-            style={{ width: `${Math.min(100, (credits.totalEarned / (credits.totalCredits || 1)) * 100)}%` }} />
-        </div>
-        <div className="credit-category-grid grid grid-cols-2 gap-px overflow-hidden border border-slate-200 bg-slate-200 sm:grid-cols-3 xl:grid-cols-6">
-          {GROUPS.map((g) => {
-            const s = credits.groups[g.key]!;
-            const pct = Math.min(100, (s.earned / (s.total || 1)) * 100);
-            const GroupIcon = g.icon;
-            return (
-              <button key={g.key} onClick={() => setFilter(filter === g.key ? "all" : g.key)}
-                className={`credit-category min-h-[72px] bg-white p-3 text-left text-xs transition ${filter === g.key ? "is-active" : ""}`}>
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1.5 font-medium text-slate-600">
-                    <GroupIcon className={`h-4 w-4 shrink-0 ${g.iconColor}`} />
-                    {g.label}
-                  </span>
-                  <span className="tabular-nums text-slate-400">{s.earned}/{s.total}</span>
-                </div>
-                <div className="mt-3 h-1 overflow-hidden bg-slate-100">
-                  <div className={`h-full ${g.bar} transition-all`} style={{ width: `${pct}%` }} />
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── 搜索栏 ── */}
-      <div className="course-toolbar flex flex-wrap items-center gap-3 border border-slate-200 bg-white p-2">
-        <div className="relative min-w-[220px] flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="搜索课程名称或课号..." className="course-search h-10 w-full border-0 bg-transparent py-2 pl-10 pr-4 text-sm focus:outline-none" />
-        </div>
-        <div className="view-switch flex border border-slate-200 bg-slate-50 p-0.5">
-          {[{ k: "map", l: "修读导图" }, { k: "timeline", l: "学期时间线" }].map((v) => (
-            <button key={v.k} onClick={() => setView(v.k as "map" | "timeline")}
-              className={`min-h-9 px-4 text-xs font-medium transition ${view === v.k ? "is-active" : "text-slate-500 hover:bg-white hover:text-slate-800"}`}>
-              <span>{v.l}</span>
+          {minorInputs.length < 3 && (
+            <button
+              type="button"
+              onClick={() => setMinorInputs((current) => [...current, ""])}
+              disabled={selectedYear == null}
+              className="mt-[22px] flex h-10 items-center justify-center gap-1.5 border border-dashed border-blue-300 bg-blue-50/60 px-3 text-sm font-semibold text-blue-700 transition hover:border-blue-500 hover:bg-blue-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400"
+            >
+              <Plus className="h-4 w-4" />
+              添加辅修专业
             </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── 课程区域 ── */}
-      {isLoading && (
-        <div className="py-16 text-center text-sm text-slate-400">加载课程数据中...</div>
-      )}
-      {isError && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">加载课程失败，请刷新重试</div>
-      )}
-      {!isLoading && !isError && (
-      <>
-      {view === "map" ? (
-        <div className="space-y-8">
-          {GROUPS.map((g) => {
-            const items = filtered.filter((c) => getCatKey(c) === g.key);
-            if (items.length === 0) return null;
-            const GroupIcon = g.icon;
-            return (
-              <div key={g.key} className={`course-group relative border border-l-4 border-slate-200 ${g.border} bg-white px-4 py-4 lg:px-5`}>
-                <span className={`absolute -left-[9px] top-5 h-3.5 w-3.5 ${g.dot} border-[3px] border-white`} />
-                <h3 className="mb-5 flex items-center gap-3 text-xl font-bold tracking-tight text-slate-800">
-                  <GroupIcon className={`h-7 w-7 shrink-0 ${g.iconColor}`} />
-                  {g.label}
-                  <span className="ml-1 text-base font-normal text-slate-400">({items.length}门)</span>
-                </h3>
-                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-                  {items.map((c) => (
-                    <Card key={c.code} c={c} passed={passed.has(c.code)} hl={isHL(c)}
-                      onClick={() => router.push(`/course/${c.code}`)}
-                      onToggle={() => toggle(c.code)}
-                      onEnter={() => setHovered(c.code)} onLeave={() => setHovered(null)} />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {timelinePlan.size === 0 && (
-            <p className="py-10 text-center text-sm text-slate-400">
-              当前条件下暂无课程（未关联培养方案的课程不出现在时间线）
-            </p>
           )}
-          {[...timelinePlan.keys()].sort((a, b) => a - b).map((sem) => {
-            const byCat = timelinePlan.get(sem)!;
-            return (
-              <div key={sem} className="relative border-l-2 border-slate-200 pl-6">
-                <div className="absolute -left-[7px] top-1.5 flex h-3 w-3 items-center justify-center rounded-full border-2 border-blue-400 bg-white" />
-                <h4 className="mb-3 text-sm font-bold text-slate-700">{semesterLabel(sem)}</h4>
-                <div className="space-y-4">
-                  {/* 分类块按 GROUPS 固定顺序渲染，与修读导图一致 */}
-                  {GROUPS.map((g) => {
-                    const items = byCat.get(g.key);
-                    if (!items || items.length === 0) return null;
-                    const GroupIcon = g.icon;
-                    return (
-                      <div key={g.key} className={`border-l-4 ${g.border} pl-3`}>
-                        <h5 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                          <GroupIcon className={`h-4 w-4 ${g.iconColor}`} />
-                          {g.label}
-                          <span className="text-xs font-normal text-slate-400">({items.length}门)</span>
-                        </h5>
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                          {items.map((c) => (
-                            <Card key={c.code} c={c} passed={passed.has(c.code)} hl={isHL(c)}
-                              onClick={() => router.push(`/course/${c.code}`)}
-                              onToggle={() => toggle(c.code)}
-                              onEnter={() => setHovered(c.code)} onLeave={() => setHovered(null)} />
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {/* GROUPS 之外的分类 key 兜底展示（不丢课程） */}
-                  {[...byCat.entries()]
-                    .filter(([k]) => !GROUPS.some((g) => g.key === k))
-                    .map(([catKey, items]) => (
-                      <div key={catKey} className="border-l-4 border-l-slate-300 pl-3">
-                        <h5 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                          <GeneralEducationIcon className="h-4 w-4 text-slate-500" />
-                          {catKey}
-                          <span className="text-xs font-normal text-slate-400">({items.length}门)</span>
-                        </h5>
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                          {items.map((c) => (
-                            <Card key={c.code} c={c} passed={passed.has(c.code)} hl={isHL(c)}
-                              onClick={() => router.push(`/course/${c.code}`)}
-                              onToggle={() => toggle(c.code)}
-                              onEnter={() => setHovered(c.code)} onLeave={() => setHovered(null)} />
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            );
-          })}
         </div>
-      )}
-      </>
-      )}
-    </div>
-  );
-}
 
-// ─── 课程卡片 ────────────────────────────────────
-function Card({ c, passed, hl, onClick, onToggle, onEnter, onLeave }: {
-  c: CourseData; passed: boolean; hl: boolean;
-  onClick: () => void; onToggle: () => void;
-  onEnter: () => void; onLeave: () => void;
-}) {
-  const catColors: Record<string, string> = {
-    gen_ed: "border-blue-200 bg-blue-50/30 text-blue-700",
-    major_base: "border-cyan-200 bg-cyan-50/30 text-cyan-700",
-    major_core: "border-amber-200 bg-amber-50/30 text-amber-700",
-    major_practice: "border-teal-200 bg-teal-50/30 text-teal-700",
-    major_module: "border-emerald-200 bg-emerald-50/30 text-emerald-700",
-    personalized: "border-blue-200 bg-blue-50/30 text-blue-700",
-  };
-  const rawCat = c.category ?? "";
-  const catKey = rawCat.startsWith("module_") ? "major_module" : rawCat;
-  const cc = catColors[catKey] ?? "border-slate-200 bg-white";
+        {(programError || updatePrograms.error) && (
+          <p className="mt-3 text-xs font-medium text-red-600">
+            {programError || (updatePrograms.error as Error).message}
+          </p>
+        )}
+      </div>
 
-  return (
-    <div onClick={onClick} onMouseEnter={onEnter} onMouseLeave={onLeave}
-      className={`course-card group relative cursor-pointer border bg-white p-3.5 transition-all duration-150 ${passed ? "is-passed ring-1 ring-emerald-300" : ""} ${hl ? "opacity-100" : "opacity-40"}`}>
-      <div className="mb-1.5 flex items-start justify-between gap-2">
-        <h5 className="truncate text-[15px] font-semibold text-slate-800" title={c.name}>{c.name}</h5>
-        <button onClick={(e) => { e.stopPropagation(); onToggle(); }}
-          className={`course-check flex h-5 w-5 shrink-0 items-center justify-center border transition ${passed ? "border-emerald-400 bg-emerald-100 text-emerald-600" : "border-slate-300 text-transparent hover:border-slate-400"}`}>
-          <Check className="h-2.5 w-2.5" />
-        </button>
-      </div>
-      <div className="flex items-center justify-between text-[11px]">
-        <span className="course-code text-slate-400">{c.code}</span>
-        <span className="flex items-center gap-1 font-medium text-slate-500">
-          {c.credits}学分 <ChevronRight className="h-3 w-3 text-slate-300" />
-        </span>
-      </div>
-      {(c.prerequisites?.length ?? 0) > 0 && (
-        <div className="pointer-events-none absolute right-2 top-[-7px] scale-0 bg-slate-900 px-2 py-1 text-[10px] text-white shadow-lg transition group-hover:scale-100">
-          前置: {c.prerequisites.map((p, index) => (
-            <span key={p.code} className="course-code">
-              {index > 0 ? ", " : ""}{p.code}
-            </span>
-          ))}
+      {/* ── 培养方案视图（内嵌主页） ── */}
+      {userProgramsLoading ? (
+        <div className="py-16 text-center text-sm text-slate-400">加载培养方案中...</div>
+      ) : currentMajorId ? (
+        <ProgramDocumentView programId={currentMajorId} />
+      ) : (
+        <div className="rounded-xl border border-dashed border-slate-200 bg-white px-6 py-14 text-center">
+          <p className="text-sm text-slate-400">选择专业组合并点击「应用专业组合」查看培养方案</p>
         </div>
       )}
     </div>
