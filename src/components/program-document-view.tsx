@@ -125,6 +125,17 @@ export function ProgramDocumentView({
 
   const openCourse = (code: string) => router.push(`/course/${code}`);
 
+  // 辅修 Tab 可见性：已应用辅修，或当前文档自带了辅修要求
+  const hasMinorTab =
+    (appliedMinors?.length ?? 0) > 0 ||
+    Boolean(programDoc?.minorPrograms && programDoc.minorPrograms.length > 0);
+
+  // 辅修 Tab 消失时（如删除全部已应用辅修后重新应用）回落到"按学期行动清单"，
+  // 避免 activeTab 残留 "minor" 渲染空面板且无高亮 Tab
+  useEffect(() => {
+    if (!hasMinorTab && activeTab === "minor") setActiveTab("semester");
+  }, [hasMinorTab, activeTab]);
+
   // tab 列表：辅修方案仅在数据存在时出现
   const tabs = useMemo<TabMeta[]>(() => {
     const list: TabMeta[] = [
@@ -132,14 +143,11 @@ export function ProgramDocumentView({
       { key: "credits", label: "按学分进度板", icon: Target },
       { key: "activities", label: "二三四课堂", icon: ListChecks },
     ];
-    const hasMinorTab =
-      (appliedMinors?.length ?? 0) > 0 ||
-      Boolean(programDoc?.minorPrograms && programDoc.minorPrograms.length > 0);
     if (hasMinorTab) {
       list.push({ key: "minor", label: "辅修方案", icon: Library });
     }
     return list;
-  }, [programDoc, appliedMinors]);
+  }, [hasMinorTab]);
 
   // 学分进度板统计：整棵树总进度 + 各组 O(1) 查表
   const stats = useMemo(
@@ -817,6 +825,7 @@ function AppliedMinorCard({
     data: program,
     isLoading,
     isError,
+    refetch,
   } = useQuery<ProgramDetail>({
     queryKey: ["program-document", minor.id],
     queryFn: () => api.get<ProgramDetail>(`/api/programs/${minor.id}`),
@@ -844,8 +853,16 @@ function AppliedMinorCard({
         </h3>
         <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-400">
           <AlertCircle className="h-4 w-4" />
-          该辅修方案暂不可用（可能已停用），无法展示其修读要求。
+          该辅修方案加载失败，暂时无法展示其修读要求。
         </p>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-blue-600 transition hover:text-blue-800"
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+          重新加载
+        </button>
       </section>
     );
   }
@@ -865,11 +882,15 @@ function AppliedMinorCard({
           </span>
         )}
       </div>
-      <div className="mt-3 space-y-4">
-        {tiers.map((tier) => (
-          <MinorTierBlock key={tier.key} tier={tier} onOpen={onOpen} />
-        ))}
-      </div>
+      {tiers.length > 0 ? (
+        <div className="mt-3 space-y-4">
+          {tiers.map((tier) => (
+            <MinorTierBlock key={tier.key} tier={tier} onOpen={onOpen} />
+          ))}
+        </div>
+      ) : (
+        <p className="mt-3 text-xs text-slate-400">该方案未提供可展示的辅修修读要求。</p>
+      )}
     </section>
   );
 }
@@ -909,7 +930,7 @@ function MinorTierBlock({
               </span>
               <span className="max-w-[180px] truncate">{c.courseName}</span>
               <span className="tabular-nums text-blue-400">{c.credits}</span>
-              <ExternalLink className="h-3 w-3 opacity-40 transition group-hover:opacity-100" />
+              <ExternalLink aria-hidden="true" className="h-3 w-3 opacity-40 transition group-hover:opacity-100" />
             </button>
           ))}
         </div>

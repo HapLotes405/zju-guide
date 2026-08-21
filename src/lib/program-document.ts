@@ -305,12 +305,17 @@ export interface MinorTierView {
 export function buildMinorView(document: ProgramDocument): MinorTierView[] {
   const minors = document.minorPrograms ?? [];
 
-  // 主方案中带标记的课程（去重：同一课码只保留首个出现）
+  // 主方案中带标记的课程（同一课码出现多次时合并 marks，避免分档依赖出现顺序）
   const marked = new Map<string, { course: ModuleCourse; marks: string[] }>();
   for (const { course } of collectCourses(document.moduleGroups)) {
     const marks = course.marks ?? [];
-    if (marks.length > 0 && !marked.has(course.courseCode)) {
-      marked.set(course.courseCode, { course, marks });
+    if (marks.length === 0) continue;
+    const existing = marked.get(course.courseCode);
+    if (existing) {
+      existing.marks = Array.from(new Set([...existing.marks, ...marks]));
+      existing.course.marks = existing.marks;
+    } else {
+      marked.set(course.courseCode, { course, marks: [...marks] });
     }
   }
   const byCode = (a: ModuleCourse, b: ModuleCourse) => a.courseCode.localeCompare(b.courseCode);
@@ -323,31 +328,58 @@ export function buildMinorView(document: ProgramDocument): MinorTierView[] {
     .map(({ course }) => course)
     .sort(byCode);
 
-  const micro = minors.find((m) => m.name.includes("微辅修"));
-  const major = minors.find((m) => m.name.includes("辅修专业"));
-  const degree = minors.find((m) => m.name.includes("辅修学位"));
+  // 定位三档：精确名优先，子串兜底（覆盖"辅修专业（项目）""微辅修（xxx）"等变体，
+  // 也兼容裸名"辅修"；"辅修"只做精确匹配以免误吞"辅修学位"）
+  const findMinor = (exact: string[], substring: string[]) =>
+    minors.find((m) => exact.includes(m.name ?? "")) ??
+    minors.find((m) => substring.some((n) => (m.name ?? "").includes(n)));
+  const micro = findMinor(["微辅修"], ["微辅修"]);
+  const major = findMinor(["辅修专业", "辅修"], ["辅修专业"]);
+  const degree = findMinor(["辅修学位"], ["辅修学位"]);
 
-  return [
-    {
+  // 微辅修课程按课码去重，与另两档一致（避免重复渲染导致 React key 冲突）
+  const microCourses = new Map<string, ModuleCourse>();
+  for (const c of micro?.courses ?? []) {
+    if (!microCourses.has(c.courseCode)) microCourses.set(c.courseCode, c);
+  }
+
+  // 只输出文档确实提供了的档位：避免为裸名"辅修"等未分档条目虚构出不存在的档
+  const tiers: MinorTierView[] = [];
+  if (micro) {
+    tiers.push({
       key: "micro",
-      name: micro?.name ?? "微辅修",
-      requiredCredits: micro?.requiredCredits ?? null,
-      ruleText: micro?.ruleText,
-      courses: [...(micro?.courses ?? [])].sort(byCode),
-    },
-    {
+      name: micro.name ?? "微辅修",
+      requiredCredits: micro.requiredCredits ?? null,
+      ruleText: micro.ruleText,
+      courses: [...microCourses.values()].sort(byCode),
+    });
+  }
+  if (major) {
+    tiers.push({
       key: "major",
-      name: major?.name ?? "辅修专业",
-      requiredCredits: major?.requiredCredits ?? null,
-      ruleText: major?.ruleText,
+      name: major.name ?? "辅修专业",
+      requiredCredits: major.requiredCredits ?? null,
+      ruleText: major.ruleText,
       courses: starOnly,
-    },
-    {
+    });
+  }
+  if (degree) {
+    tiers.push({
       key: "degree",
-      name: degree?.name ?? "辅修学位",
-      requiredCredits: degree?.requiredCredits ?? null,
-      ruleText: degree?.ruleText,
+      name: degree.name ?? "辅修学位",
+      requiredCredits: degree.requiredCredits ?? null,
+      ruleText: degree.ruleText,
       courses: starOrDouble,
-    },
-  ];
+    });
+  } else if (starOrDouble.some((c) => c.marks?.includes("**"))) {
+    // 主方案有 ** 标记但 minorPrograms 未抽出"辅修学位"条目：仍提供课程清单，学分未知
+    tiers.push({
+      key: "degree",
+      name: "辅修学位",
+      requiredCredits: null,
+      ruleText: "按主方案标记 ** 的课程修读（培养方案未单独标注辅修学位学分）。",
+      courses: starOrDouble,
+    });
+  }
+  return tiers;
 }
