@@ -26,11 +26,13 @@ import {
 } from "lucide-react";
 import {
   type GroupStats,
+  type MinorTierView,
   type ModuleGroup,
   type ProgramDocument,
   type SelectionType,
   type SemesterCourseItem,
   SELECTION_LABELS,
+  buildMinorView,
   buildSemesterPlan,
   collectUnscheduled,
   computeStatsForGroups,
@@ -78,7 +80,14 @@ function MarksBadge({ marks }: { marks?: string[] }) {
 }
 
 // ─── 主组件 ──────────────────────────────────────
-export function ProgramDocumentView({ programId }: { programId: string }) {
+export function ProgramDocumentView({
+  programId,
+  appliedMinors,
+}: {
+  programId: string;
+  /** 已应用的主修方案（type=MINOR），用于「辅修方案」Tab 展示"我的辅修"；缺省时退化为展示当前方案文档自带的辅修要求 */
+  appliedMinors?: { id: string; majorName: string; year: number }[];
+}) {
   const router = useRouter();
   const id = programId;
 
@@ -123,11 +132,14 @@ export function ProgramDocumentView({ programId }: { programId: string }) {
       { key: "credits", label: "按学分进度板", icon: Target },
       { key: "activities", label: "二三四课堂", icon: ListChecks },
     ];
-    if (programDoc?.minorPrograms && programDoc.minorPrograms.length > 0) {
+    const hasMinorTab =
+      (appliedMinors?.length ?? 0) > 0 ||
+      Boolean(programDoc?.minorPrograms && programDoc.minorPrograms.length > 0);
+    if (hasMinorTab) {
       list.push({ key: "minor", label: "辅修方案", icon: Library });
     }
     return list;
-  }, [programDoc]);
+  }, [programDoc, appliedMinors]);
 
   // 学分进度板统计：整棵树总进度 + 各组 O(1) 查表
   const stats = useMemo(
@@ -310,7 +322,9 @@ export function ProgramDocumentView({ programId }: { programId: string }) {
         />
       )}
       {activeTab === "activities" && <ActivitiesPane document={programDoc} />}
-      {activeTab === "minor" && <MinorPane document={programDoc} onOpen={openCourse} />}
+      {activeTab === "minor" && (
+        <MinorPane document={programDoc} onOpen={openCourse} appliedMinors={appliedMinors} />
+      )}
     </div>
   );
 }
@@ -722,12 +736,31 @@ function ActivitiesPane({ document }: { document: ProgramDocument }) {
 function MinorPane({
   document,
   onOpen,
+  appliedMinors,
 }: {
   document: ProgramDocument;
   onOpen: (code: string) => void;
+  appliedMinors?: { id: string; majorName: string; year: number }[];
 }) {
-  const minors = document.minorPrograms ?? [];
+  // 已应用辅修：按"我的辅修"逐张卡片展示目标专业的真实修读要求（与当前主修文档解耦）
+  if (appliedMinors && appliedMinors.length > 0) {
+    return (
+      <div className="space-y-4">
+        <header className="flex items-center gap-2">
+          <Library className="h-5 w-5 text-blue-600" />
+          <h3 className="text-base font-bold text-slate-800">
+            我的辅修（已应用 {appliedMinors.length} 个）
+          </h3>
+        </header>
+        {appliedMinors.map((minor) => (
+          <AppliedMinorCard key={minor.id} minor={minor} onOpen={onOpen} />
+        ))}
+      </div>
+    );
+  }
 
+  // 未应用辅修（如 /program/[id] 预览页）：展示当前方案文档自带的辅修要求
+  const minors = document.minorPrograms ?? [];
   return (
     <div className="space-y-4">
       {minors.map((minor) => {
@@ -768,6 +801,123 @@ function MinorPane({
           </section>
         );
       })}
+    </div>
+  );
+}
+
+// 单个"我的辅修"卡片：拉取目标专业的方案文档，提取其辅修三档要求
+function AppliedMinorCard({
+  minor,
+  onOpen,
+}: {
+  minor: { id: string; majorName: string; year: number };
+  onOpen: (code: string) => void;
+}) {
+  const {
+    data: program,
+    isLoading,
+    isError,
+  } = useQuery<ProgramDetail>({
+    queryKey: ["program-document", minor.id],
+    queryFn: () => api.get<ProgramDetail>(`/api/programs/${minor.id}`),
+    enabled: !!minor.id,
+  });
+
+  if (isLoading) {
+    return (
+      <section className="animate-pulse border border-slate-200 bg-white p-5">
+        <div className="mb-3 h-5 w-44 rounded bg-slate-200" />
+        <div className="space-y-2">
+          <div className="h-3 w-full rounded bg-slate-100" />
+          <div className="h-3 w-2/3 rounded bg-slate-100" />
+        </div>
+      </section>
+    );
+  }
+
+  if (isError || !program?.document) {
+    return (
+      <section className="border border-slate-200 bg-white p-5">
+        <h3 className="text-base font-bold text-slate-800">
+          {minor.majorName}
+          <span className="ml-1.5 text-sm font-normal text-slate-400">· {minor.year} 级</span>
+        </h3>
+        <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-400">
+          <AlertCircle className="h-4 w-4" />
+          该辅修方案暂不可用（可能已停用），无法展示其修读要求。
+        </p>
+      </section>
+    );
+  }
+
+  const doc = program.document;
+  const tiers = buildMinorView(doc);
+  return (
+    <section className="border border-slate-200 bg-white p-5">
+      <div className="mb-1 flex flex-wrap items-center gap-2">
+        <h3 className="text-base font-bold text-slate-800">
+          {doc.programVersion.majorName}
+          <span className="ml-1.5 text-sm font-normal text-slate-400">· {doc.programVersion.year} 级</span>
+        </h3>
+        {doc.programVersion.totalCreditsText != null && (
+          <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+            主修总学分 {doc.programVersion.totalCreditsText}
+          </span>
+        )}
+      </div>
+      <div className="mt-3 space-y-4">
+        {tiers.map((tier) => (
+          <MinorTierBlock key={tier.key} tier={tier} onOpen={onOpen} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// 单档辅修要求（微辅修 / 辅修专业 / 辅修学位）
+function MinorTierBlock({
+  tier,
+  onOpen,
+}: {
+  tier: MinorTierView;
+  onOpen: (code: string) => void;
+}) {
+  const courses = tier.courses;
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-2">
+        <h4 className="text-sm font-bold text-slate-700">{tier.name}</h4>
+        {tier.requiredCredits != null && (
+          <span className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
+            {tier.requiredCredits} 学分
+          </span>
+        )}
+        <span className="text-xs text-slate-400">{courses.length} 门</span>
+      </div>
+      {courses.length > 0 ? (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {courses.map((c) => (
+            <button
+              key={c.courseCode}
+              type="button"
+              onClick={() => onOpen(c.courseCode)}
+              className="group inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs text-blue-800 transition hover:bg-blue-100"
+            >
+              <span className="course-code flex items-center gap-1 font-medium">
+                {c.courseCode}
+                <MarksBadge marks={c.marks} />
+              </span>
+              <span className="max-w-[180px] truncate">{c.courseName}</span>
+              <span className="tabular-nums text-blue-400">{c.credits}</span>
+              <ExternalLink className="h-3 w-3 opacity-40 transition group-hover:opacity-100" />
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 text-xs leading-relaxed text-slate-400">
+          {tier.ruleText || "该方案未标注具体课程，仅提供学分要求。"}
+        </p>
+      )}
     </div>
   );
 }

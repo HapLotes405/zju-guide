@@ -282,3 +282,72 @@ export function computeTotalStats(
   }
   return { targetCredits: target, earnedCredits: earned, courseCount: count };
 }
+
+// ─── 辅修方案 ──────────────────────────────────
+
+export interface MinorTierView {
+  key: "micro" | "major" | "degree";
+  name: string;
+  requiredCredits: number | null;
+  ruleText?: string;
+  courses: ModuleCourse[];
+}
+
+/**
+ * 提取某个培养方案的辅修修读要求（三档）：
+ * - 微辅修：minorPrograms 里现成的课程清单
+ * - 辅修专业：主方案中标记 *（不含 **）的课程
+ * - 辅修学位：主方案中标记 * 或 ** 的课程
+ * 清洗时辅修专业/学位在 minorPrograms 里通常只有学分与规则（无课程清单），
+ * 真实课程藏在主方案课程 marks 里（* = 辅修专业，** = 辅修学位）。
+ * 某档无课程时 courses 为空数组，由 UI 诚实降级展示学分要求。
+ */
+export function buildMinorView(document: ProgramDocument): MinorTierView[] {
+  const minors = document.minorPrograms ?? [];
+
+  // 主方案中带标记的课程（去重：同一课码只保留首个出现）
+  const marked = new Map<string, { course: ModuleCourse; marks: string[] }>();
+  for (const { course } of collectCourses(document.moduleGroups)) {
+    const marks = course.marks ?? [];
+    if (marks.length > 0 && !marked.has(course.courseCode)) {
+      marked.set(course.courseCode, { course, marks });
+    }
+  }
+  const byCode = (a: ModuleCourse, b: ModuleCourse) => a.courseCode.localeCompare(b.courseCode);
+  const starOnly = [...marked.values()]
+    .filter(({ marks }) => marks.includes("*") && !marks.includes("**"))
+    .map(({ course }) => course)
+    .sort(byCode);
+  const starOrDouble = [...marked.values()]
+    .filter(({ marks }) => marks.includes("*") || marks.includes("**"))
+    .map(({ course }) => course)
+    .sort(byCode);
+
+  const micro = minors.find((m) => m.name.includes("微辅修"));
+  const major = minors.find((m) => m.name.includes("辅修专业"));
+  const degree = minors.find((m) => m.name.includes("辅修学位"));
+
+  return [
+    {
+      key: "micro",
+      name: micro?.name ?? "微辅修",
+      requiredCredits: micro?.requiredCredits ?? null,
+      ruleText: micro?.ruleText,
+      courses: [...(micro?.courses ?? [])].sort(byCode),
+    },
+    {
+      key: "major",
+      name: major?.name ?? "辅修专业",
+      requiredCredits: major?.requiredCredits ?? null,
+      ruleText: major?.ruleText,
+      courses: starOnly,
+    },
+    {
+      key: "degree",
+      name: degree?.name ?? "辅修学位",
+      requiredCredits: degree?.requiredCredits ?? null,
+      ruleText: degree?.ruleText,
+      courses: starOrDouble,
+    },
+  ];
+}

@@ -222,6 +222,17 @@ export default function DashboardPage() {
     userPrograms?.find((p) => p.type === "MAJOR")?.programVersion ?? null;
   const currentMajorId = appliedMajor?.id ?? null;
 
+  // 已应用辅修：传给内嵌视图的「辅修方案」Tab 展示"我的辅修"
+  const appliedMinors =
+    userPrograms
+      ?.filter((p) => p.type === "MINOR")
+      .slice(0, 3)
+      .map((p) => ({
+        id: p.programVersionId,
+        majorName: p.programVersion.majorName,
+        year: p.programVersion.year,
+      })) ?? [];
+
   // 草稿（选择器当前所选）与已应用主修不一致时提示，避免"改了没反应"的困惑
   const draftDiffers =
     selectedYear != null &&
@@ -394,7 +405,7 @@ export default function DashboardPage() {
       {userProgramsLoading ? (
         <div className="py-16 text-center text-sm text-slate-400">加载培养方案中...</div>
       ) : currentMajorId ? (
-        <ProgramDocumentView programId={currentMajorId} />
+        <ProgramDocumentView programId={currentMajorId} appliedMinors={appliedMinors} />
       ) : (
         <div className="rounded-xl border border-dashed border-slate-200 bg-white px-6 py-14 text-center">
           <p className="text-sm text-slate-400">选择专业组合并点击「应用专业组合」查看培养方案</p>
