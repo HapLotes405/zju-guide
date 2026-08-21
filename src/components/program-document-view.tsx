@@ -15,6 +15,7 @@ import {
   BookOpen,
   CalendarDays,
   Check,
+  ChevronDown,
   ExternalLink,
   GraduationCap,
   Layers,
@@ -83,10 +84,16 @@ function MarksBadge({ marks }: { marks?: string[] }) {
 export function ProgramDocumentView({
   programId,
   appliedMinors,
+  hideMinorTab = false,
+  hideHeader = false,
 }: {
   programId: string;
   /** 已应用的主修方案（type=MINOR），用于「辅修方案」Tab 展示"我的辅修"；缺省时退化为展示当前方案文档自带的辅修要求 */
   appliedMinors?: { id: string; majorName: string; year: number }[];
+  /** 嵌套展示某个辅修时隐藏其「辅修方案」Tab：该要求卡已在卡内展示，避免重复/递归 */
+  hideMinorTab?: boolean;
+  /** 嵌套展示时跳过顶部信息卡（卡头已含专业名/年级/总学分） */
+  hideHeader?: boolean;
 }) {
   const router = useRouter();
   const id = programId;
@@ -125,10 +132,11 @@ export function ProgramDocumentView({
 
   const openCourse = (code: string) => router.push(`/course/${code}`);
 
-  // 辅修 Tab 可见性：已应用辅修，或当前文档自带了辅修要求
+  // 辅修 Tab 可见性：已应用辅修，或当前文档自带了辅修要求；嵌套展示时强制隐藏
   const hasMinorTab =
-    (appliedMinors?.length ?? 0) > 0 ||
-    Boolean(programDoc?.minorPrograms && programDoc.minorPrograms.length > 0);
+    !hideMinorTab &&
+    ((appliedMinors?.length ?? 0) > 0 ||
+      Boolean(programDoc?.minorPrograms && programDoc.minorPrograms.length > 0));
 
   // 辅修 Tab 消失时（如删除全部已应用辅修后重新应用）回落到"按学期行动清单"，
   // 避免 activeTab 残留 "minor" 渲染空面板且无高亮 Tab
@@ -213,7 +221,8 @@ export function ProgramDocumentView({
 
   return (
     <div className="space-y-5">
-      {/* ── 头部卡 ── */}
+      {/* ── 头部卡（hideHeader 时跳过，如嵌套展示的辅修完整方案） ── */}
+      {!hideHeader && (
       <div className="border border-slate-200 bg-white p-6 lg:p-8">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span className="course-code rounded-md bg-blue-100 px-2.5 py-0.5 font-semibold text-blue-700">
@@ -294,6 +303,7 @@ export function ProgramDocumentView({
           </div>
         )}
       </div>
+      )}
 
       {/* ── 页内 Tab（view-switch 样式） ── */}
       <div className="view-switch flex flex-wrap border border-slate-200 bg-slate-50 p-0.5">
@@ -832,6 +842,9 @@ function AppliedMinorCard({
     enabled: !!minor.id,
   });
 
+  // 卡内展开该辅修专业的完整培养方案（嵌套 ProgramDocumentView，复用同一查询缓存，不重复请求）
+  const [showFullPlan, setShowFullPlan] = useState(false);
+
   if (isLoading) {
     return (
       <section className="animate-pulse border border-slate-200 bg-white p-5">
@@ -890,6 +903,24 @@ function AppliedMinorCard({
         </div>
       ) : (
         <p className="mt-3 text-xs text-slate-400">该方案未提供可展示的辅修修读要求。</p>
+      )}
+
+      <button
+        type="button"
+        onClick={() => setShowFullPlan((v) => !v)}
+        aria-expanded={showFullPlan}
+        className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 transition hover:text-blue-800"
+      >
+        <ChevronDown
+          className={`h-3.5 w-3.5 transition-transform ${showFullPlan ? "rotate-180" : ""}`}
+        />
+        {showFullPlan ? "收起完整培养方案" : "查看完整培养方案"}
+      </button>
+
+      {showFullPlan && (
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <ProgramDocumentView programId={minor.id} hideMinorTab hideHeader />
+        </div>
       )}
     </section>
   );
