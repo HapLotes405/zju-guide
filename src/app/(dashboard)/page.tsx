@@ -185,8 +185,6 @@ export default function DashboardPage() {
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [programsInitialized, setProgramsInitialized] = useState(false);
   const [programError, setProgramError] = useState("");
-  // 当前应用的主修培养方案 id：初始取 GET /api/me/programs 的 MAJOR，应用成功后取 PUT 返回的 MAJOR
-  const [appliedMajorId, setAppliedMajorId] = useState<string | null>(null);
 
   const { data: programCatalog } = useQuery<ProgramCatalog>({
     queryKey: ["programs"],
@@ -214,24 +212,30 @@ export default function DashboardPage() {
     setSelectedYear(major?.programVersion.year ?? null);
     setMajorInput(major?.programVersion.majorName ?? "");
     setMinorInputs(minors.map((program) => program.programVersion.majorName));
-    setAppliedMajorId(major?.programVersionId ?? null);
     setProgramsInitialized(true);
   }, [programsInitialized, userPrograms]);
 
-  // 首帧兜底：query 已就绪但 effect 尚未运行时直接取已保存的 MAJOR，避免空态闪烁
-  const serverMajorId =
-    userPrograms?.find((p) => p.type === "MAJOR")?.programVersionId ?? null;
-  const currentMajorId = appliedMajorId ?? serverMajorId;
+  // 当前应用的主修方案：唯一来源是 /api/me/programs 里的 MAJOR。
+  // 应用专业组合成功后，onSuccess 用 PUT 返回数据 setQueryData 同步缓存，
+  // userPrograms 更新 → 下方 currentMajorId 自动重算 → 内嵌视图切换到新方案（无需额外状态）。
+  const appliedMajor =
+    userPrograms?.find((p) => p.type === "MAJOR")?.programVersion ?? null;
+  const currentMajorId = appliedMajor?.id ?? null;
+
+  // 草稿（选择器当前所选）与已应用主修不一致时提示，避免"改了没反应"的困惑
+  const draftDiffers =
+    selectedYear != null &&
+    majorInput !== "" &&
+    appliedMajor != null &&
+    (selectedYear !== appliedMajor.year || majorInput !== appliedMajor.majorName);
 
   const updatePrograms = useMutation({
     mutationFn: (selection: { majorProgramVersionId: string; minorProgramVersionIds: string[] }) =>
       api.put<UserProgram[]>("/api/me/programs", selection),
     onSuccess: (programs) => {
       setProgramError("");
-      // 应用成功后立即用返回数据里的 MAJOR 更新内嵌培养方案视图
-      const major = programs.find((p) => p.type === "MAJOR");
-      if (major) setAppliedMajorId(major.programVersionId);
-      queryClient.invalidateQueries({ queryKey: ["my-programs"] });
+      // 用 PUT 返回的完整 userProgram 列表同步缓存，内嵌培养方案视图立即切到新主修
+      queryClient.setQueryData(["my-programs"], programs);
     },
   });
 
@@ -245,7 +249,10 @@ export default function DashboardPage() {
         (program) => program.year === selectedYear && program.majorName === majorName,
       );
     const major = findProgram(majorInput);
-    const minors = minorInputs.map((input) => findProgram(input));
+    // 空辅修槽（未填的"添加辅修"槽位）不应参与校验，只校验真正填了内容的槽
+    const minors = minorInputs
+      .filter((input) => input.trim() !== "")
+      .map((input) => findProgram(input));
 
     if (!major) {
       setProgramError("请从候选列表中选择一个主修专业");
@@ -284,7 +291,7 @@ export default function DashboardPage() {
             <button
               type="button"
               onClick={applyProgramSelection}
-              disabled={updatePrograms.isPending || !majorInput || !selectedYear}
+              disabled={updatePrograms.isPending || !majorInput || !selectedYear || !programCatalog}
               className="geometry-button min-h-9 px-4 text-sm font-semibold text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-45"
             >
               {updatePrograms.isPending ? "应用中..." : "应用专业组合"}
@@ -337,7 +344,7 @@ export default function DashboardPage() {
 
           {minorInputs.map((minor, index) => (
             <ProgramCombobox
-              key={index}
+              key={`minor-${index}`}
               label={`辅修专业 ${index + 1}`}
               value={minor}
               options={selectedYear != null ? yearOptions : []}
@@ -367,12 +374,23 @@ export default function DashboardPage() {
 
         {(programError || updatePrograms.error) && (
           <p className="mt-3 text-xs font-medium text-red-600">
-            {programError || (updatePrograms.error as Error).message}
+            {programError ||
+              (updatePrograms.error instanceof Error
+                ? updatePrograms.error.message
+                : "应用失败，请稍后重试")}
           </p>
         )}
       </div>
 
       {/* ── 培养方案视图（内嵌主页） ── */}
+      {draftDiffers && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
+          <span className="font-semibold">已修改，尚未应用</span>
+          <span className="text-amber-700">
+            当前仍显示已保存的主修方案（{appliedMajor.year} 级 · {appliedMajor.majorName}），点击「应用专业组合」后生效。
+          </span>
+        </div>
+      )}
       {userProgramsLoading ? (
         <div className="py-16 text-center text-sm text-slate-400">加载培养方案中...</div>
       ) : currentMajorId ? (

@@ -39,8 +39,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   }, [isLoading, isAuthenticated, router]);
 
   useEffect(() => {
-    // /program/* 是"先看看培养方案"预览页，未选专业的新用户也能浏览，需豁免此守卫
-    const isProgramPreview = pathname.startsWith("/program");
+    // /program/* 是"先看看培养方案"预览页、/course/* 是课程详情页，
+    // 未选专业的新用户也能浏览，需豁免此守卫（否则预览时点课程会被弹回 onboarding）
+    const isProgramPreview = pathname.startsWith("/program") || pathname.startsWith("/course");
     if (!isLoading && !programsLoading && isAuthenticated && !hasProgram && pathname !== "/onboarding" && !isProgramPreview) {
       router.replace("/onboarding");
     }

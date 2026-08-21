@@ -376,7 +376,7 @@ function SemesterPlanPane({
           <div className="grid grid-cols-1 gap-2.5 p-4 sm:grid-cols-2 lg:grid-cols-3">
             {unscheduled.map((f) => (
               <SemesterCourseRow
-                key={f.course.courseCode}
+                key={`${f.course.courseCode}-${f.path.join("/")}`}
                 item={{
                   courseCode: f.course.courseCode,
                   courseName: f.course.courseName,
@@ -494,7 +494,7 @@ function CreditsBoardPane({
           {header.extraCredits ? ` + 二三四课堂 ${header.extraCredits}` : ""}）；其他必修环节等认定型要求见下方分组
         </p>
         <p className="mt-1 text-xs text-slate-400">
-          点击下方课程标记「已修」模拟进度，当前还差
+          点击下方课程标记「已修」模拟进度（仅本地临时模拟，不会保存），当前还差
           <span className={`mx-1 font-bold tabular-nums ${remaining > 0 ? "text-amber-600" : "text-emerald-600"}`}>
             {remaining.toFixed(1)}
           </span>
