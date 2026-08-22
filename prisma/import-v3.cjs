@@ -5,7 +5,8 @@ const { PrismaClient } = require("@prisma/client");
 const fs = require("fs");
 const path = require("path");
 const prisma = new PrismaClient();
-const HOME = "C:/Users/dudu1";
+// 一次性导入脚本：输入目录不硬编码个人路径，运行时从环境变量取
+const HOME = process.env.IMPORT_HOME || process.env.USERPROFILE || process.env.HOME;
 
 function normalize(name) {
   let n = name.trim();

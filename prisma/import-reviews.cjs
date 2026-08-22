@@ -2,7 +2,8 @@ const { PrismaClient } = require("@prisma/client");
 const fs = require("fs"); const path = require("path"); const crypto = require("crypto");
 const prisma = new PrismaClient();
 const uuid = () => crypto.randomUUID();
-const HOME = "C:/Users/dudu1";
+// 一次性导入脚本：输入目录不硬编码个人路径，运行时从环境变量取
+const HOME = process.env.IMPORT_HOME || process.env.USERPROFILE || process.env.HOME;
 
 async function main() {
   const tf = path.join(HOME, "chalaoshi_teachers_v2.json");

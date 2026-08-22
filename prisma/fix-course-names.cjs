@@ -167,8 +167,9 @@ const UNCERTAIN = {
 const D = "--dry-run" === process.argv[2] || "--dry-run" === process.argv[3];
 
 async function main() {
-  // ---- 1. 解析队友文件 ----
-  const srcPath = "c:/Users/dudu1/Documents/xwechat_files/wxid_dncls94qwma912_e1d9/msg/file/2026-08/course_name_fixes(1).txt";
+  // ---- 1. 解析队友文件（一次性脚本：文件路径由环境变量 COURSE_FIX_FILE 指定，不写死个人路径） ----
+  const srcPath = process.env.COURSE_FIX_FILE;
+  if (!srcPath) throw new Error("需要设置 COURSE_FIX_FILE 环境变量，指向队友的课程名修复文件");
   const lines = fs.readFileSync(srcPath, "utf-8").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const raw = new Map(); // code -> rawName
   for (const l of lines) {
