@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import { BookOpen, Search } from "lucide-react";
 import Link from "next/link";
@@ -9,6 +9,7 @@ import Link from "next/link";
 export default function CoursesPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["courses", search, page],
@@ -38,7 +39,17 @@ export default function CoursesPage() {
       </div>
 
       {isLoading && <div className="text-center text-sm text-slate-400">加载中...</div>}
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">加载失败</div>}
+      {error && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+          <span>课程加载失败，请检查网络后重试</span>
+          <button
+            onClick={() => queryClient.invalidateQueries({ queryKey: ["courses", search, page] })}
+            className="shrink-0 rounded-md border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-100"
+          >
+            重试
+          </button>
+        </div>
+      )}
 
       {data && (
         <>

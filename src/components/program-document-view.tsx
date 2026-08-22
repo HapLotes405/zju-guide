@@ -164,13 +164,13 @@ export function ProgramDocumentView({
 
   // 学分进度板统计：整棵树总进度 + 各组 O(1) 查表
   const stats = useMemo(
-    () => (programDoc ? computeStatsForGroups(programDoc.moduleGroups, passed) : new Map()),
+    () => (programDoc ? computeStatsForGroups(programDoc.moduleGroups ?? [], passed) : new Map()),
     [programDoc, passed],
   );
   const total = useMemo<GroupStats>(
     () =>
       programDoc
-        ? computeTotalStats(programDoc.moduleGroups, passed)
+        ? computeTotalStats(programDoc.moduleGroups ?? [], passed)
         : { targetCredits: 0, earnedCredits: 0, courseCount: 0 },
     [programDoc, passed],
   );
@@ -604,6 +604,8 @@ function GroupNode({
                   tabIndex={0}
                   onClick={() => onToggle(c.courseCode)}
                   onKeyDown={(e) => {
+                    // 内层"查看课程"按钮自行处理键盘，避免外层 role=button 拦截其 Enter/空格
+                    if ((e.target as HTMLElement).tagName === "BUTTON") return;
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
                       onToggle(c.courseCode);
@@ -688,14 +690,14 @@ function ActivitiesPane({ document }: { document: ProgramDocument }) {
             <h3 className="text-base font-bold text-slate-800">{yearBlock.title}</h3>
           </header>
           <div className="space-y-5 p-5">
-            {yearBlock.activities.map((activity) => (
+            {(yearBlock.activities ?? []).map((activity) => (
               <div key={activity.kind}>
                 <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
                   <BookOpen className="h-4 w-4 text-slate-400" />
                   {activity.kind}
-                  <span className="text-xs font-normal text-slate-400">（{activity.items.length} 项）</span>
+                  <span className="text-xs font-normal text-slate-400">（{activity.items?.length ?? 0} 项）</span>
                 </h4>
-                {activity.items.length > 0 ? (
+                {(activity.items?.length ?? 0) > 0 ? (
                   <div className="overflow-x-auto rounded-lg border border-slate-200">
                     <table className="w-full text-left text-sm">
                       <thead>

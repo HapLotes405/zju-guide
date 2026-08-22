@@ -493,7 +493,11 @@ export default function CourseDetailPage() {
     <main className="course-information mx-auto max-w-[1400px] px-4 py-8 lg:px-6">
       {/* ── Back + Header ─────────────────────────────────── */}
       <button
-        onClick={() => router.back()}
+        onClick={() =>
+          typeof window !== "undefined" && window.history.length > 1
+            ? router.back()
+            : router.push("/courses")
+        }
         className="group mb-6 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-blue-600 transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -1228,7 +1232,16 @@ function ContributeForm({
           type="file"
           accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.txt,.md,.png,.jpg,.jpeg"
           className="hidden"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          onChange={(e) => {
+            const next = e.target.files?.[0] ?? null;
+            if (next && next.size > 50 * 1024 * 1024) {
+              toast.error("附件超过 50MB 上限，请压缩后重新选择");
+              setFile(null);
+              if (fileInputRef.current) fileInputRef.current.value = "";
+              return;
+            }
+            setFile(next);
+          }}
         />
         {file ? (
           <div className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2">

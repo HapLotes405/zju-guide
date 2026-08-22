@@ -30,7 +30,9 @@ export async function saveUpload(file: File): Promise<SavedUpload> {
 
   if (!ALLOWED_EXTENSIONS.has(ext)) {
     throw new UploadError(
-      `不支持的文件类型 .${ext}，支持：${[...ALLOWED_EXTENSIONS].join(" / ")}`,
+      ext
+        ? `不支持的文件类型 .${ext}，支持：${[...ALLOWED_EXTENSIONS].join(" / ")}`
+        : `文件无扩展名，无法识别类型。支持：${[...ALLOWED_EXTENSIONS].join(" / ")}`,
     );
   }
   if (file.size > MAX_FILE_SIZE) {

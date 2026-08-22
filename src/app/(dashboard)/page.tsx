@@ -186,7 +186,7 @@ export default function DashboardPage() {
   const [programsInitialized, setProgramsInitialized] = useState(false);
   const [programError, setProgramError] = useState("");
 
-  const { data: programCatalog } = useQuery<ProgramCatalog>({
+  const { data: programCatalog, isLoading: programCatalogLoading, error: programCatalogError } = useQuery<ProgramCatalog>({
     queryKey: ["programs"],
     queryFn: () => api.get("/api/programs"),
   });
@@ -293,6 +293,21 @@ export default function DashboardPage() {
     <div className="dashboard-home space-y-5">
       {/* ── 专业组合选择器卡 ── */}
       <div className="program-selector border border-slate-200 bg-white p-4 lg:p-5">
+        {programCatalogLoading && (
+          <p className="mb-4 text-xs text-slate-400">培养方案加载中...</p>
+        )}
+        {programCatalogError && (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+            <span>培养方案加载失败，请检查网络后重试</span>
+            <button
+              type="button"
+              onClick={() => queryClient.invalidateQueries({ queryKey: ["programs"] })}
+              className="shrink-0 rounded-md border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-100"
+            >
+              重试
+            </button>
+          </div>
+        )}
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-base font-bold text-slate-900">专业组合</h2>
@@ -333,9 +348,11 @@ export default function DashboardPage() {
                 <span className="novecento-number">{year}</span> 级
               </button>
             ))}
-            {(programCatalog?.years ?? []).length === 0 && (
-              <p className="text-xs text-slate-400">暂无可选的培养方案</p>
-            )}
+            {!programCatalogLoading &&
+              !programCatalogError &&
+              (programCatalog?.years ?? []).length === 0 && (
+                <p className="text-xs text-slate-400">暂无可选的培养方案</p>
+              )}
           </div>
           {selectedYear != null && (
             <p className="mt-1.5 text-xs text-slate-400">{yearOptions.length} 个专业可用 · 先选年级再搜索匹配专业</p>

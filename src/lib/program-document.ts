@@ -174,7 +174,7 @@ export interface SemesterEntry {
 export function buildSemesterPlan(document: ProgramDocument): SemesterEntry[] {
   const map = new Map<string, SemesterEntry>();
   for (const { course, path, group } of collectCourses(document.moduleGroups)) {
-    for (const slot of course.semesters) {
+    for (const slot of course.semesters ?? []) {
       const key = `${slot.year}-${slot.half}`;
       let entry = map.get(key);
       if (!entry) {
@@ -207,7 +207,7 @@ export function buildSemesterPlan(document: ProgramDocument): SemesterEntry[] {
 /** 无学期标注的课程（如英语水平测试、旧代码研究生课），单独兜底展示 */
 export function collectUnscheduled(document: ProgramDocument): FlatCourse[] {
   return collectCourses(document.moduleGroups).filter(
-    (f) => f.course.semesters.length === 0,
+    (f) => (f.course.semesters?.length ?? 0) === 0,
   );
 }
 

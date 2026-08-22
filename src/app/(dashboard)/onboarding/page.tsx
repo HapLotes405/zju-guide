@@ -19,7 +19,7 @@ export default function OnboardingPage() {
   const [major, setMajor] = useState("");
   const [majorSearch, setMajorSearch] = useState("");
 
-  const { data, isLoading } = useQuery<ProgramData>({
+  const { data, isLoading, error } = useQuery<ProgramData>({
     queryKey: ["programs"],
     queryFn: () => api.get("/api/programs"),
   });
@@ -47,6 +47,20 @@ export default function OnboardingPage() {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <p className="text-sm text-slate-400">加载培养方案列表...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
+        <p className="text-sm text-slate-600">培养方案加载失败，请检查网络后重试</p>
+        <button
+          onClick={() => queryClient.invalidateQueries({ queryKey: ["programs"] })}
+          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+        >
+          重试
+        </button>
       </div>
     );
   }
