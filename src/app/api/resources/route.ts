@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
       const contentLength = Number(request.headers.get("content-length") ?? 0);
       if (contentLength > MAX_FILE_SIZE + 1024 * 1024) {
         return NextResponse.json(
-          { error: { code: "PAYLOAD_TOO_LARGE", message: "文件大小超过 20MB 上限" } },
+          { error: { code: "PAYLOAD_TOO_LARGE", message: "文件大小超过 50MB 上限" } },
           { status: 413 },
         );
       }
@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
       }
       if (totalBytes > MAX_FILE_SIZE) {
         return NextResponse.json(
-          { error: { code: "PAYLOAD_TOO_LARGE", message: "上传文件总大小超过 20MB 上限" } },
+          { error: { code: "PAYLOAD_TOO_LARGE", message: "上传文件总大小超过 50MB 上限" } },
           { status: 413 },
         );
       }

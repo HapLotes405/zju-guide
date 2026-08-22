@@ -10,7 +10,7 @@
 
 @font-face {
   font-family: "Novecento Wide";
-  src: url("/fonts/novecento-wide-normal.otf") format("opentype");
+  src: url("/fonts/novecento-wide-normal.ttf") format("truetype");
   font-style: normal;
   font-weight: 400;
   font-display: swap;
@@ -122,6 +122,19 @@ p {
   font-size: max(1em, 0.8125rem);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.055em;
+}
+
+.novecento-number {
+  font-family: "Novecento Wide", "Arial Wide", "Arial", sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.course-information {
+  font-family: "Novecento Wide", "OPPO Sans", "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
+}
+
+.course-contribute-form :where(input, textarea, select) {
+  font-family: "OPPO Sans", "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
 }
 
 .app-nav-link {

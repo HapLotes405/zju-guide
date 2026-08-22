@@ -6,13 +6,12 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  FileText,
   Send,
   BookOpen,
   LinkIcon,
@@ -20,10 +19,10 @@ import {
   RefreshCw,
   X,
   Search,
-  ChevronDown,
   Check,
   Loader2,
   ShieldCheck,
+  Paperclip,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api-client";
@@ -128,16 +127,21 @@ async function searchCourses(query: string): Promise<CourseOption[]> {
   return json.data ?? [];
 }
 
-async function submitResource(data: ContributeFormValues): Promise<{ id: string }> {
-  return api.post<{ id: string }>("/api/resources", {
-    type: data.type,
-    title: data.title,
-    url: data.url || null,
-    summary: data.summary || null,
-    applicableStage: data.applicableStage,
-    copyrightStatus: data.copyrightStatus,
-    courseCodes: data.courseCodes,
-  });
+async function submitResource(
+  data: ContributeFormValues,
+  file: File | null,
+): Promise<{ resourceId: string }> {
+  const form = new FormData();
+  form.set("type", data.type);
+  form.set("title", data.title);
+  if (data.url) form.set("url", data.url);
+  if (data.summary) form.set("summary", data.summary);
+  form.set("applicableStage", data.applicableStage);
+  form.set("copyrightStatus", data.copyrightStatus);
+  form.set("courseCodes", JSON.stringify(data.courseCodes));
+  if (file) form.set("file", file);
+
+  return api.postForm<{ resourceId: string }>("/api/resources", form);
 }
 
 // ─── Sub-components ────────────────────────────────────────
@@ -202,6 +206,8 @@ export default function ContributePage() {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [searchDropdownOpen, setSearchDropdownOpen] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Debounce the search query (300ms)
   useEffect(() => {
@@ -218,12 +224,11 @@ export default function ContributePage() {
     control,
     watch,
     setValue,
-    reset,
     formState: { errors, isSubmitting },
   } = useForm<ContributeFormValues>({
     resolver: zodResolver(contributeSchema),
     defaultValues: {
-      type: undefined,
+      type: "LECTURE_NOTE",
       title: "",
       url: "",
       summary: "",
@@ -251,7 +256,8 @@ export default function ContributePage() {
 
   // ---- Submit mutation ----
   const submitMutation = useMutation({
-    mutationFn: submitResource,
+    mutationFn: ({ data, file }: { data: ContributeFormValues; file: File | null }) =>
+      submitResource(data, file),
     onSuccess: (result) => {
       toast.success("投稿已提交，等待审核");
       queryClient.invalidateQueries({ queryKey: ["resources"] });
@@ -275,7 +281,7 @@ export default function ContributePage() {
   // ---- Handlers ----
 
   const onSubmit = handleSubmit((data) => {
-    submitMutation.mutate(data);
+    submitMutation.mutate({ data, file });
   });
 
   const addCourse = useCallback(
@@ -319,7 +325,7 @@ export default function ContributePage() {
   }, []);
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="mx-auto max-w-4xl">
       {/* ── Header ──────────────────────────────────── */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">
@@ -333,48 +339,18 @@ export default function ContributePage() {
       {/* ── Form ────────────────────────────────────── */}
       <form
         onSubmit={onSubmit}
-        className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
+        className="rounded-xl border border-blue-200 bg-blue-50/40 p-6 shadow-sm"
       >
         <div className="space-y-6">
-          {/* Resource Type */}
-          <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
-              资源类型 <span className="text-red-400">*</span>
-            </label>
-            <select
-              {...register("type")}
-              className={cn(
-                "w-full rounded-lg border bg-white px-3 py-2.5 text-sm transition-colors",
-                "focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400",
-                errors.type
-                  ? "border-red-300 focus:ring-red-500/30"
-                  : "border-slate-300",
-              )}
-            >
-              <option value="">-- 请选择资源类型 --</option>
-              {(
-                Object.entries(RESOURCE_TYPE_LABELS) as [
-                  ResourceTypeEnum,
-                  string,
-                ][]
-              ).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-            <FieldError message={errors.type?.message} />
-          </div>
-
           {/* Title */}
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700">
-              标题 <span className="text-red-400">*</span>
+              资源标题 <span className="text-red-400">*</span>
             </label>
             <input
               {...register("title")}
               type="text"
-              placeholder="例：数据结构期末复习笔记"
+              placeholder="如：2024 秋冬期末真题回忆"
               className={cn(
                 "w-full rounded-lg border bg-white px-3 py-2.5 text-sm transition-colors",
                 "focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400",
@@ -385,6 +361,63 @@ export default function ContributePage() {
               )}
             />
             <FieldError message={errors.title?.message} />
+          </div>
+
+          {/* Type and stage */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                类型 <span className="text-red-400">*</span>
+              </label>
+              <select
+                {...register("type")}
+                className={cn(
+                  "w-full rounded-lg border bg-white px-3 py-2.5 text-sm transition-colors",
+                  "focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400",
+                  errors.type
+                    ? "border-red-300 focus:ring-red-500/30"
+                    : "border-slate-300",
+                )}
+              >
+                <option value="">-- 请选择资源类型 --</option>
+                {(
+                  Object.entries(RESOURCE_TYPE_LABELS) as [
+                    ResourceTypeEnum,
+                    string,
+                  ][]
+                ).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <FieldError message={errors.type?.message} />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                适用阶段 <span className="text-red-400">*</span>
+              </label>
+              <select
+                {...register("applicableStage")}
+                className={cn(
+                  "w-full rounded-lg border bg-white px-3 py-2.5 text-sm transition-colors",
+                  "focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400",
+                  errors.applicableStage
+                    ? "border-red-300 focus:ring-red-500/30"
+                    : "border-slate-300",
+                )}
+              >
+                {(
+                  Object.entries(STAGE_LABELS) as [ApplicableStageEnum, string][]
+                ).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <FieldError message={errors.applicableStage?.message} />
+            </div>
           </div>
 
           {/* URL (optional) */}
@@ -417,7 +450,7 @@ export default function ContributePage() {
             <textarea
               {...register("summary")}
               rows={3}
-              placeholder="简单描述这个资源的内容和用途..."
+              placeholder="简单介绍一下这份资料"
               className={cn(
                 "w-full rounded-lg border bg-white px-3 py-2.5 text-sm transition-colors resize-none",
                 "focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400",
@@ -430,41 +463,58 @@ export default function ContributePage() {
             <FieldError message={errors.summary?.message} />
           </div>
 
-          {/* Applicable Stage */}
+          {/* Attachment */}
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">
-              适用阶段 <span className="text-red-400">*</span>
-            </label>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {(
-                Object.entries(STAGE_LABELS) as [
-                  ApplicableStageEnum,
-                  string,
-                ][]
-              ).map(([value, label]) => {
-                const isSelected = watch("applicableStage") === value;
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() =>
-                      setValue("applicableStage", value, {
-                        shouldValidate: true,
-                      })
-                    }
-                    className={cn(
-                      "rounded-lg border px-3 py-2 text-sm font-medium transition-all",
-                      isSelected
-                        ? "border-blue-300 bg-blue-50 text-blue-700 shadow-sm"
-                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300",
-                    )}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-            <FieldError message={errors.applicableStage?.message} />
+            <span className="mb-2 block text-sm font-medium text-slate-700">
+              附件 <span className="text-slate-400">（可选，50MB 内）</span>
+            </span>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.txt,.md,.png,.jpg,.jpeg"
+              className="hidden"
+              onChange={(event) => {
+                const nextFile = event.target.files?.[0] ?? null;
+                if (nextFile && nextFile.size > 50 * 1024 * 1024) {
+                  toast.error("文件大小超过 50MB 上限");
+                  event.target.value = "";
+                  setFile(null);
+                  return;
+                }
+                setFile(nextFile);
+              }}
+            />
+            {file ? (
+              <div className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2.5">
+                <Paperclip className="h-4 w-4 flex-shrink-0 text-slate-400" />
+                <span className="min-w-0 flex-1 truncate text-sm text-slate-700">
+                  {file.name}
+                </span>
+                <span className="flex-shrink-0 text-xs text-slate-400">
+                  {(file.size / 1024 / 1024).toFixed(1)}MB
+                </span>
+                <button
+                  type="button"
+                  aria-label="移除附件"
+                  onClick={() => {
+                    setFile(null);
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                  }}
+                  className="flex-shrink-0 text-slate-400 transition hover:text-red-500"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-3 text-sm text-slate-500 transition hover:border-blue-400 hover:text-blue-600"
+              >
+                <Paperclip className="h-4 w-4" />
+                选择附件（PDF / 文档 / 图片 / 压缩包）
+              </button>
+            )}
           </div>
 
           {/* Course Selection */}
@@ -640,28 +690,33 @@ export default function ContributePage() {
           </div>
         </div>
 
-        {/* Submit Button */}
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className={cn(
-            "mt-8 w-full rounded-xl px-4 py-3 text-sm font-semibold text-white transition-all",
-            "bg-blue-600 hover:bg-blue-700 active:scale-[0.98]",
-            "disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100",
-          )}
-        >
-          {isSubmitting ? (
-            <span className="flex items-center justify-center gap-2">
+        {/* Actions */}
+        <div className="mt-8 flex items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            disabled={isSubmitting || submitMutation.isPending}
+            className="rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+          >
+            取消
+          </button>
+          <button
+            type="submit"
+            disabled={isSubmitting || submitMutation.isPending}
+            className={cn(
+              "inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition-all",
+              "bg-blue-600 hover:bg-blue-700 active:scale-[0.98]",
+              "disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100",
+            )}
+          >
+            {isSubmitting || submitMutation.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
-              提交中...
-            </span>
-          ) : (
-            <span className="flex items-center justify-center gap-2">
+            ) : (
               <Send className="h-4 w-4" />
-              提交投稿
-            </span>
-          )}
-        </button>
+            )}
+            {isSubmitting || submitMutation.isPending ? "提交中..." : "提交投稿"}
+          </button>
+        </div>
       </form>
     </div>
   );

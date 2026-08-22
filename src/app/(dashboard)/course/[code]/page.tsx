@@ -490,7 +490,7 @@ export default function CourseDetailPage() {
   };
 
   return (
-    <main className="mx-auto max-w-[1400px] px-4 py-8 lg:px-6">
+    <main className="course-information mx-auto max-w-[1400px] px-4 py-8 lg:px-6">
       {/* ── Back + Header ─────────────────────────────────── */}
       <button
         onClick={() => router.back()}
@@ -1144,7 +1144,7 @@ function ContributeForm({
   };
 
   return (
-    <form onSubmit={submit} className="space-y-3 rounded-lg border border-blue-200 bg-blue-50/40 p-4">
+    <form onSubmit={submit} className="course-contribute-form space-y-3 rounded-lg border border-blue-200 bg-blue-50/40 p-4">
       <div>
         <label htmlFor="ct-title" className="mb-1 block text-xs font-medium text-slate-600">
           资源标题 <span className="text-red-500">*</span>
@@ -1221,7 +1221,7 @@ function ContributeForm({
 
       <div>
         <span className="mb-1 block text-xs font-medium text-slate-600">
-          附件（可选，20MB 内）
+          附件（可选，50MB 内）
         </span>
         <input
           ref={fileInputRef}

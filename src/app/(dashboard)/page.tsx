@@ -330,7 +330,7 @@ export default function DashboardPage() {
                     : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
                 }`}
               >
-                {year} 级
+                <span className="novecento-number">{year}</span> 级
               </button>
             ))}
             {(programCatalog?.years ?? []).length === 0 && (
