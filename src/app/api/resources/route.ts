@@ -40,6 +40,59 @@ interface CreateResourceBody {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// GET /api/resources — 浏览全部已审核资源（学习资料页默认内容）
+// 返回每个资源关联的课程（供页面渲染课程 chip 跳转）与贡献者信息
+// ──────────────────────────────────────────────────────────────────────────
+
+export async function GET() {
+  try {
+    const resources = await prisma.resource.findMany({
+      where: { status: "APPROVED" },
+      include: {
+        submitter: { select: { username: true } },
+        courseResources: {
+          select: { course: { select: { code: true, name: true } } },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      // 兜底上限：当前浏览页依赖完整数组做计数与客户端过滤，
+      // 不加 take 时数据量增长会一次拉全表。500 远超现实规模，仅作防滥用护栏。
+      take: 500,
+    });
+
+    const data = resources.map((r) => ({
+      id: r.id,
+      title: r.title,
+      type: r.type,
+      // 读侧白名单（纵深防御）：仅透传 http(s) 外链，异常值置空
+      // 防未来直接写库路径插入 javascript:/data: 被渲染成可点击链接
+      url: r.url && /^https?:\/\/\S+$/i.test(r.url) ? r.url : null,
+      summary: r.summary,
+      filePath: r.filePath,
+      fileName: r.fileName,
+      fileSize: r.fileSize,
+      copyrightStatus: r.copyrightStatus,
+      applicableStage: r.applicableStage,
+      submitterName: r.submitter.username,
+      createdAt: r.createdAt.toISOString(),
+      courses: r.courseResources.map((cr) => ({
+        code: cr.course.code,
+        name: cr.course.name,
+      })),
+    }));
+
+    return NextResponse.json({ data });
+  } catch (error) {
+    // 对齐同文件 POST 与 files 端点的既有日志模式，避免生产上 500 无痕
+    console.error("GET /api/resources error:", error);
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: "服务器内部错误" } },
+      { status: 500 },
+    );
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // POST /api/resources — submit a new resource (requireAuth, contributor+)
 // ──────────────────────────────────────────────────────────────────────────
 
