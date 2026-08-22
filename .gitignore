@@ -78,6 +78,8 @@ DEMO_SCRIPT.md
 training-plans/
 scripts/
 output/
+# 培养方案原始数据（PDF 解析/整理的 JSON，仅供本地导入，不纳入版本控制）
+program-data/
 
 # ==================== 其他 ====================
 /fonts/
