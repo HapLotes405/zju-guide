@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Pencil, Plus, X, Loader2 } from "lucide-react";
+import { Plus, X, Loader2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api-client";
 
 interface Chapter {
@@ -229,22 +229,13 @@ export function ExamPrepSection({
 
   return (
     <div className="space-y-4">
-      {/* 顶部操作行 */}
-      <div className="flex items-center justify-between">
+      {/* 内容更新时间 */}
+      <div>
         <span className="text-xs text-slate-400">
           {data?.updatedByName
             ? `最后由 ${data.updatedByName} 更新于 ${data.updatedAt.slice(0, 10)}`
             : "内容由同学共建"}
         </span>
-        <button
-          type="button"
-          onClick={startEdit}
-          disabled={isLoading || isError}
-          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:border-blue-300 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Pencil className="h-3.5 w-3.5" />
-          编辑
-        </button>
       </div>
 
       {isLoading && (
@@ -266,9 +257,7 @@ export function ExamPrepSection({
 
       {!isLoading && !isError && isEmpty && (
         <div className="rounded-lg border border-dashed border-slate-200 px-4 py-6 text-center">
-          <p className="text-sm text-slate-400">
-            暂无复习内容，点击右上角「编辑」贡献第一条
-          </p>
+          <p className="text-sm text-slate-400">暂无复习内容</p>
         </div>
       )}
 

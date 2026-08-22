@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-// 投稿附件上传：白名单扩展名 + 20MB 上限，存储名为 uuid 防碰撞
+// 投稿附件上传：白名单扩展名 + 50MB 上限，存储名为 uuid 防碰撞
 
-export const MAX_FILE_SIZE = 20 * 1024 * 1024;
+export const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
 const ALLOWED_EXTENSIONS = new Set([
   "pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx",
@@ -34,7 +34,7 @@ export async function saveUpload(file: File): Promise<SavedUpload> {
     );
   }
   if (file.size > MAX_FILE_SIZE) {
-    throw new UploadError("文件大小超过 20MB 上限");
+    throw new UploadError("文件大小超过 50MB 上限");
   }
 
   const filePath = `${randomUUID()}.${ext}`;

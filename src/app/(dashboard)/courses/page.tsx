@@ -61,7 +61,7 @@ export default function CoursesPage() {
                         {course.name}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{course.credits}</td>
+                    <td className="novecento-number px-4 py-3 text-slate-600">{course.credits}</td>
                     <td className="px-4 py-3 text-slate-500">{course.department}</td>
                   </tr>
                 ))}
