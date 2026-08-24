@@ -209,6 +209,10 @@ export const api = {
     });
   },
 
+  patchForm<T = unknown>(url: string, formData: FormData, init?: Omit<RequestInit, "method" | "body">): Promise<T> {
+    return request<T>(url, { ...init, method: "PATCH", body: formData });
+  },
+
   delete<T = unknown>(url: string, init?: Omit<RequestInit, "method" | "body">): Promise<T> {
     return request<T>(url, { ...init, method: "DELETE" });
   },

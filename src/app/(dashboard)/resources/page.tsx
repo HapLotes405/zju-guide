@@ -214,7 +214,7 @@ export default function ResourcesPage() {
 function ResourceCard({ resource: r }: { resource: BrowseResource }) {
   const stageLabel = APPLICABLE_STAGE_LABELS[normalizeStage(r.applicableStage)];
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="resource-preview-card min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-700">
           ✅ 已审核
@@ -227,8 +227,14 @@ function ResourceCard({ resource: r }: { resource: BrowseResource }) {
         </span>
       </div>
 
-      <h3 className="font-medium text-slate-900">{r.title}</h3>
-      {r.summary && <p className="mt-1 text-sm text-slate-500">{r.summary}</p>}
+      <Link href={`/resource/${r.id}`} className="block min-w-0">
+        <h3 className="resource-title font-medium text-slate-900 hover:text-blue-700">
+          {r.title}
+        </h3>
+        {r.summary && (
+          <p className="resource-preview mt-1 text-sm text-slate-500">{r.summary}</p>
+        )}
+      </Link>
 
       {/* 关联课程 chip → 课程详情页 */}
       {r.courses.length > 0 && (
@@ -247,8 +253,10 @@ function ResourceCard({ resource: r }: { resource: BrowseResource }) {
         </div>
       )}
 
-      <div className="mt-2.5 flex items-center justify-between text-xs text-slate-400">
-        <span>贡献者：{r.submitterName} · {r.createdAt.slice(0, 10)}</span>
+      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+        <span>
+          贡献者：{r.submitterName} · <span className="novecento-number">{r.createdAt.slice(0, 10)}</span>
+        </span>
         <div className="flex items-center gap-3">
           {r.fileName && r.filePath && (
             <a

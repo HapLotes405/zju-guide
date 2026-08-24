@@ -30,9 +30,16 @@ export default function SettingsPage() {
       <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h3 className="mb-4 font-semibold text-slate-900">关于求是学径</h3>
         <div className="space-y-2 text-sm text-slate-600">
-          <p>版本：v0.1.0</p>
-          <p>技术栈：Next.js 15 + TypeScript + Prisma + Tailwind CSS</p>
-          <p>浙江大学软件工程课程实践项目 · 2026</p>
+          <p>
+            版本：<span className="novecento-number">v0.1.0</span>
+          </p>
+          <p>
+            技术栈：Next.js <span className="novecento-number">15</span> + TypeScript + Prisma +
+            Tailwind CSS
+          </p>
+          <p>
+            X-Lab软件团队训练营实践项目 · <span className="novecento-number">2026</span>
+          </p>
         </div>
       </div>
     </div>

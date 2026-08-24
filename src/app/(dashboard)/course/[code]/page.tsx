@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils";
 import { RESOURCE_TYPE_LABELS, APPLICABLE_STAGE_LABELS } from "@/lib/constants";
 import { api, ApiError } from "@/lib/api-client";
 import { buildCC98SearchUrl } from "@/lib/cc98";
+import { handleMarkdownTab } from "@/lib/markdown-editor";
 import { ExamPrepSection } from "@/components/exam-prep-section";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -510,11 +511,6 @@ export default function CourseDetailPage() {
           ) : (
             <Badge variant="elective">选修</Badge>
           )}
-          {course.programs.map((p) => (
-            <Badge key={`${p.majorName}-${p.year}`}>
-              {p.majorName} {p.year}级
-            </Badge>
-          ))}
         </div>
 
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">
@@ -600,22 +596,6 @@ export default function CourseDetailPage() {
             <InfoRow label="开课院系" value={course.department} />
             <InfoRow label="学期" value={course.semester} />
             <InfoRow label="类别" value={course.category} />
-            {course.programs.length > 0 && (
-              <div className="mt-2">
-                <span className="text-xs text-slate-400">所属培养方案</span>
-                <div className="mt-1 flex flex-wrap gap-1.5">
-                  {course.programs.map((p, i) => (
-                    <span
-                      key={i}
-                      className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2 py-1 text-xs"
-                    >
-                      {p.majorName} {p.year}级 · 第{p.suggestedSemester}学期
-                      {p.isCompulsory ? " · 必修" : " · 选修"}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </CourseSectionCard>
 
@@ -1041,7 +1021,7 @@ function ResourceCardContent({
 
 function ResourceItem({ resource: r }: { resource: ResourceData }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="resource-preview-card min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-2 flex items-center gap-2">
         <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-700">
           ✅ 已审核
@@ -1050,10 +1030,18 @@ function ResourceItem({ resource: r }: { resource: ResourceData }) {
           {RESOURCE_TYPE_LABELS[r.type] ?? r.type}
         </span>
       </div>
-      <h4 className="font-medium text-slate-900">{r.title}</h4>
-      {r.summary && <p className="mt-1 text-sm text-slate-500">{r.summary}</p>}
-      <div className="mt-2 flex items-center justify-between text-xs text-slate-400">
-        <span>贡献者：{r.submitterName} · {r.createdAt.slice(0, 10)}</span>
+      <Link href={`/resource/${r.id}`} className="block min-w-0">
+        <h4 className="resource-title font-medium text-slate-900 hover:text-blue-700">
+          {r.title}
+        </h4>
+        {r.summary && (
+          <p className="resource-preview mt-1 text-sm text-slate-500">{r.summary}</p>
+        )}
+      </Link>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+        <span>
+          贡献者：{r.submitterName} · <span className="novecento-number">{r.createdAt.slice(0, 10)}</span>
+        </span>
         <div className="flex items-center gap-3">
           {r.fileName && r.filePath && (
             <a href={`/api/files/${r.filePath}`} className="flex items-center gap-1 text-blue-500 hover:underline">
@@ -1106,6 +1094,7 @@ function ContributeForm({
   defaultStage: string;
   onClose: () => void;
 }) {
+  const router = useRouter();
   const [title, setTitle] = useState("");
   const [type, setType] = useState("LECTURE_NOTE");
   const [url, setUrl] = useState("");
@@ -1131,11 +1120,12 @@ function ContributeForm({
       form.set("applicableStage", stage);
       form.set("courseCodes", JSON.stringify([courseCode]));
       if (file) form.set("file", file);
-      await api.postForm("/api/resources", form);
+      const result = await api.postForm<{ resourceId: string }>("/api/resources", form);
       toast.success(
         `已提交，审核通过后将展示在「${APPLICABLE_STAGE_LABELS[stage] ?? "对应阶段"}」`,
       );
       onClose();
+      router.push(`/resource/${result.resourceId}`);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "提交失败，请稍后重试");
     } finally {
@@ -1213,6 +1203,7 @@ function ContributeForm({
           id="ct-summary"
           value={summary}
           onChange={(e) => setSummary(e.target.value)}
+          onKeyDown={(event) => handleMarkdownTab(event, setSummary)}
           rows={2}
           placeholder="简单介绍一下这份资料"
           className="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"

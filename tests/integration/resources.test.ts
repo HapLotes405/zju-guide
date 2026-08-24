@@ -7,6 +7,10 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import type { ResourceType, ResourceStatus } from "@prisma/client";
 import { GET as courseResourcesHandler } from "@/app/api/courses/[code]/resources/route";
+import {
+  GET as resourceDetailHandler,
+  PATCH as resourceUpdateHandler,
+} from "@/app/api/resources/[id]/route";
 import { POST as resourcesPostHandler } from "@/app/api/resources/route";
 import { prisma } from "@/lib/prisma";
 import { signToken } from "@/lib/auth";
@@ -64,6 +68,7 @@ async function createLinkedResource(
     type: string;
     applicableStage: string | null;
     status: string;
+    summary: string;
   }>,
 ) {
   const resource = await prisma.resource.create({
@@ -72,6 +77,7 @@ async function createLinkedResource(
       type: (data.type as ResourceType | undefined) ?? "LECTURE_NOTE",
       applicableStage: data.applicableStage ?? null,
       status: (data.status as ResourceStatus | undefined) ?? "APPROVED",
+      summary: data.summary ?? null,
       submitterId: contributorId,
     },
   });
@@ -141,6 +147,123 @@ describe("GET /api/courses/[code]/resources", () => {
 
     expect(res.status).toBe(200);
     expect(json.data).toEqual([]);
+  });
+});
+
+// =============================================================================
+// GET /api/resources/[id] — 投稿阅读详情
+// =============================================================================
+
+describe("GET /api/resources/[id]", () => {
+  it("返回已审核投稿的 Markdown 正文与关联课程", async () => {
+    const resource = await createLinkedResource({
+      title: "Markdown 学习笔记",
+      summary: "## 重点\n\n- 第一章\n- 第二章",
+      applicableStage: "COURSE",
+    });
+
+    const req = createRequest(`http://localhost/api/resources/${resource.id}`);
+    const res = await resourceDetailHandler(req, {
+      params: Promise.resolve({ id: resource.id }),
+    });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.data.summary).toContain("## 重点");
+    expect(json.data.courses).toEqual([{ code: "CS101", name: "计算机科学基础" }]);
+    expect(json.data.canEdit).toBe(false);
+  });
+
+  it("不公开尚未审核的投稿", async () => {
+    const resource = await createLinkedResource({ status: "DRAFT" });
+    const req = createRequest(`http://localhost/api/resources/${resource.id}`);
+    const res = await resourceDetailHandler(req, {
+      params: Promise.resolve({ id: resource.id }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  it("投稿者本人可以读取自己的待审核投稿", async () => {
+    const resource = await createLinkedResource({ status: "DRAFT" });
+    const req = createRequest(`http://localhost/api/resources/${resource.id}`, {
+      token: contributorToken,
+    });
+    const res = await resourceDetailHandler(req, {
+      params: Promise.resolve({ id: resource.id }),
+    });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.data.status).toBe("DRAFT");
+    expect(json.data.canEdit).toBe(true);
+  });
+
+  it("非法 id 返回 404", async () => {
+    const req = createRequest("http://localhost/api/resources/not-a-uuid");
+    const res = await resourceDetailHandler(req, {
+      params: Promise.resolve({ id: "not-a-uuid" }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+});
+
+// =============================================================================
+// PATCH /api/resources/[id] — 投稿者更新
+// =============================================================================
+
+describe("PATCH /api/resources/[id]", () => {
+  it("投稿者可更新自己的投稿，且更新后重新进入审核队列", async () => {
+    const resource = await createLinkedResource({ status: "APPROVED" });
+    const req = createRequest(`http://localhost/api/resources/${resource.id}`, {
+      method: "PATCH",
+      token: contributorToken,
+      body: {
+        title: "更新后的标题",
+        type: "BLOG",
+        url: "https://example.com/updated",
+        summary: "## 更新后的 Markdown",
+        applicableStage: "MIDTERM",
+      },
+    });
+    const res = await resourceUpdateHandler(req, {
+      params: Promise.resolve({ id: resource.id }),
+    });
+    const json = await res.json();
+    const updated = await prisma.resource.findUniqueOrThrow({ where: { id: resource.id } });
+    const pending = await prisma.submission.findMany({
+      where: { resourceId: resource.id, result: null },
+    });
+
+    expect(res.status).toBe(200);
+    expect(json.data.status).toBe("DRAFT");
+    expect(updated.title).toBe("更新后的标题");
+    expect(updated.summary).toBe("## 更新后的 Markdown");
+    expect(updated.applicableStage).toBe("MIDTERM");
+    expect(pending).toHaveLength(1);
+  });
+
+  it("其他用户不能修改投稿", async () => {
+    const resource = await createLinkedResource({ status: "APPROVED" });
+    const req = createRequest(`http://localhost/api/resources/${resource.id}`, {
+      method: "PATCH",
+      token: visitorToken,
+      body: {
+        title: "越权更新",
+        type: "BLOG",
+        summary: "不应保存",
+        applicableStage: "COURSE",
+      },
+    });
+    const res = await resourceUpdateHandler(req, {
+      params: Promise.resolve({ id: resource.id }),
+    });
+
+    expect(res.status).toBe(403);
+    expect((await prisma.resource.findUniqueOrThrow({ where: { id: resource.id } })).title).toBe(
+      "测试资源",
+    );
   });
 });
 
