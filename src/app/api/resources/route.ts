@@ -93,25 +93,13 @@ export async function GET() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// POST /api/resources — submit a new resource (requireAuth, contributor+)
+// POST /api/resources — submit a new resource (requireAuth, 所有登录用户；内容由管理员审核)
 // ──────────────────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Authenticate and check role (contributor or admin)
-    const { userId, role } = await requireAuth(request);
-
-    if (role !== "CONTRIBUTOR" && role !== "ADMIN") {
-      return NextResponse.json(
-        {
-          error: {
-            code: "FORBIDDEN",
-            message: "Contributor or Admin role is required to submit resources",
-          },
-        },
-        { status: 403 },
-      );
-    }
+    // 1. Authenticate — 任何登录用户均可投稿（内容仍需管理员审核）
+    const { userId } = await requireAuth(request);
 
     // 2. Parse and validate the request body（兼容 JSON 与 multipart/form-data 文件上传）
     let body: CreateResourceBody;

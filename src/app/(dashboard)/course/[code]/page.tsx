@@ -997,11 +997,12 @@ function ResourceCardContent({
 }) {
   const { user } = useAuth();
   const [showForm, setShowForm] = useState(false);
-  const canContribute = user?.role === "CONTRIBUTOR" || user?.role === "ADMIN";
+  // 所有登录用户均可投稿（内容提交后由管理员审核）；未登录时 layout 已重定向到 /login
+  const canContribute = !!user;
 
   return (
     <div className="space-y-3">
-      {/* 投稿窗口：审核通过后展示在本格；仅贡献者及以上可见（VISITOR 提交会被服务端 403） */}
+      {/* 投稿窗口：审核通过后展示在本格；所有登录用户均可投稿 */}
       {canContribute ? (
         showForm ? (
           <ContributeForm
@@ -1025,7 +1026,7 @@ function ResourceCardContent({
       ) : (
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-center">
           <p className="text-sm text-slate-500">
-            投稿资源需要「贡献者」及以上身份
+            登录后即可投稿
           </p>
         </div>
       )}

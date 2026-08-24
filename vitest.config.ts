@@ -10,7 +10,7 @@ export default defineConfig({
       PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION: "全自动",
     },
     globalSetup: ["./tests/global-setup.ts"],
-    exclude: ["tests/e2e/**", "node_modules/**"],
+    exclude: [".claude/**", "tests/e2e/**", "node_modules/**"],
   },
   resolve: {
     alias: {

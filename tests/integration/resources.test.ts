@@ -29,7 +29,7 @@ beforeAll(async () => {
     role: "CONTRIBUTOR",
   });
 
-  // 访客：用于验证权限拒绝
+  // 访客（VISITOR）：用于验证普通登录用户也可投稿（内容仍需管理员审核）
   const visitor = await createTestUser("resource_visitor");
   visitorToken = visitor.token;
 });
@@ -211,7 +211,7 @@ describe("POST /api/resources — applicableStage 新分类校验", () => {
     expect(json.data.status).toBe("DRAFT");
   });
 
-  it("访客身份被拒绝（需贡献者及以上）", async () => {
+  it("访客（VISITOR 登录用户）也可投稿，落库为 DRAFT 待审核", async () => {
     const req = createRequest("http://localhost/api/resources", {
       method: "POST",
       token: visitorToken,
@@ -226,8 +226,8 @@ describe("POST /api/resources — applicableStage 新分类校验", () => {
     const res = await resourcesPostHandler(req);
     const json = await res.json();
 
-    expect(res.status).toBe(403);
-    expect(json.error.code).toBe("FORBIDDEN");
+    expect(res.status).toBe(201);
+    expect(json.data.status).toBe("DRAFT");
   });
 
   it("未携带有效类型时校验失败", async () => {
