@@ -211,7 +211,7 @@ describe("POST /api/resources — applicableStage 新分类校验", () => {
     expect(json.data.status).toBe("DRAFT");
   });
 
-  it("访客（VISITOR 登录用户）也可投稿，落库为 DRAFT 待审核", async () => {
+  it("访客（VISITOR 登录用户）也可投稿，落库为 DRAFT 待审核，且对外不可见", async () => {
     const req = createRequest("http://localhost/api/resources", {
       method: "POST",
       token: visitorToken,
@@ -228,6 +228,49 @@ describe("POST /api/resources — applicableStage 新分类校验", () => {
 
     expect(res.status).toBe(201);
     expect(json.data.status).toBe("DRAFT");
+
+    // 完整链路：VISITOR 投稿 → DRAFT → 公开读接口不可见（GET 只透出 APPROVED）
+    const getReq = createRequest("http://localhost/api/courses/CS101/resources");
+    const getRes = await courseResourcesHandler(getReq, {
+      params: Promise.resolve({ code: "CS101" }),
+    });
+    const getJson = await getRes.json();
+    expect(getRes.status).toBe(200);
+    expect(getJson.data).toEqual([]);
+  });
+
+  it("服务端拒绝超长 title / summary（防直连 API 绕过客户端限制）", async () => {
+    // title > 120
+    const longTitleReq = createRequest("http://localhost/api/resources", {
+      method: "POST",
+      token: contributorToken,
+      body: {
+        title: "x".repeat(121),
+        type: "LECTURE_NOTE",
+        applicableStage: "COURSE",
+        courseCodes: ["CS101"],
+      },
+    });
+    const r1 = await resourcesPostHandler(longTitleReq);
+    const j1 = await r1.json();
+    expect(r1.status).toBe(400);
+    expect(j1.error.code).toBe("VALIDATION_ERROR");
+
+    // summary > 500
+    const longSummaryReq = createRequest("http://localhost/api/resources", {
+      method: "POST",
+      token: contributorToken,
+      body: {
+        title: "正常标题",
+        type: "LECTURE_NOTE",
+        applicableStage: "COURSE",
+        courseCodes: ["CS101"],
+        summary: "y".repeat(501),
+      },
+    });
+    const r2 = await resourcesPostHandler(longSummaryReq);
+    expect(r2.status).toBe(400);
+    expect((await r2.json()).error.code).toBe("VALIDATION_ERROR");
   });
 
   it("未携带有效类型时校验失败", async () => {

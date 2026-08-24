@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole, AuthError } from "@/lib/auth";
+import { uploadPath } from "@/lib/upload";
+import { unlink } from "node:fs/promises";
 
 // PATCH /api/admin/submissions/[id] — 审核操作（通过/驳回）
 export async function PATCH(
@@ -33,6 +35,12 @@ export async function PATCH(
       { status: 409 },
     );
   }
+
+  // 提前读取关联资源的上传文件路径（驳回时用于清理，防孤儿文件占用磁盘）
+  const resource = await prisma.resource.findUnique({
+    where: { id: submission.resourceId },
+    select: { filePath: true },
+  });
 
   // 事务：更新Submission + Resource状态 + 写入audit_log
   const updated = await prisma.$transaction(async (tx) => {
@@ -69,6 +77,16 @@ export async function PATCH(
 
     return s;
   });
+
+  // 驳回时清理已上传文件（若已存在；NEEDS_REVISION 保留供修改，不清理）
+  if (result === "REJECTED" && resource?.filePath) {
+    try {
+      await unlink(uploadPath(resource.filePath));
+    } catch (e) {
+      // 文件可能已被手动删除，忽略；不影响审核响应
+      console.warn("驳回清理上传文件失败:", (e as Error).message);
+    }
+  }
 
   return NextResponse.json({ data: { id: updated.id, result: updated.result } });
   } catch (e) {

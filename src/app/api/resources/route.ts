@@ -196,10 +196,16 @@ export async function POST(request: NextRequest) {
 
     const { title, type, url, summary, copyrightStatus, applicableStage, courseCodes } = body;
 
-    // Validate title
+    // Validate title（对齐客户端 zod：非空且 ≤120 字符）
     if (!title || typeof title !== "string" || title.trim().length < 1) {
       return NextResponse.json(
         { error: { code: "VALIDATION_ERROR", message: "Title is required" } },
+        { status: 400 },
+      );
+    }
+    if (title.trim().length > 120) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "标题最多 120 个字符" } },
         { status: 400 },
       );
     }
@@ -264,14 +270,44 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+    // 防直连 API 绕过客户端 zod：url / summary 长度上限
+    if (typeof url === "string" && url.trim().length > 2048) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "url 过长（最多 2048 字符）" } },
+        { status: 400 },
+      );
+    }
+    if (summary !== undefined && summary !== null && typeof summary !== "string") {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "summary 必须是字符串" } },
+        { status: 400 },
+      );
+    }
+    if (typeof summary === "string" && summary.trim().length > 500) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "摘要最多 500 个字符" } },
+        { status: 400 },
+      );
+    }
 
-    // Validate courseCodes
+    // Validate courseCodes（非空且 ≤20，防直连 API 传入超大数组）
     if (!Array.isArray(courseCodes) || courseCodes.length === 0) {
       return NextResponse.json(
         {
           error: {
             code: "VALIDATION_ERROR",
             message: "courseCodes must be a non-empty array of course codes",
+          },
+        },
+        { status: 400 },
+      );
+    }
+    if (courseCodes.length > 20) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "courseCodes 最多关联 20 门课程",
           },
         },
         { status: 400 },
