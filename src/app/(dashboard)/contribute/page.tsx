@@ -27,6 +27,7 @@ import {
 import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api-client";
 import { RESOURCE_TYPE_LABELS, APPLICABLE_STAGE_LABELS } from "@/lib/constants";
+import { handleMarkdownTab } from "@/lib/markdown-editor";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -261,13 +262,7 @@ export default function ContributePage() {
     onSuccess: (result) => {
       toast.success("投稿已提交，等待审核");
       queryClient.invalidateQueries({ queryKey: ["resources"] });
-      // Navigate to the first associated course page
-      const firstCode = selectedCourseCodes[0];
-      if (firstCode) {
-        router.push(`/course/${firstCode}`);
-      } else {
-        router.push("/");
-      }
+      router.push(`/resource/${result.resourceId}`);
     },
     onError: (error) => {
       const message =
@@ -449,6 +444,11 @@ export default function ContributePage() {
             </label>
             <textarea
               {...register("summary")}
+              onKeyDown={(event) =>
+                handleMarkdownTab(event, (value) =>
+                  setValue("summary", value, { shouldDirty: true }),
+                )
+              }
               rows={3}
               placeholder="简单介绍一下这份资料"
               className={cn(
@@ -466,7 +466,7 @@ export default function ContributePage() {
           {/* Attachment */}
           <div>
             <span className="mb-2 block text-sm font-medium text-slate-700">
-              附件 <span className="text-slate-400">（可选，50MB 内）</span>
+              附件 <span className="text-slate-400">（可选，<span className="novecento-number">50MB</span> 内）</span>
             </span>
             <input
               ref={fileInputRef}

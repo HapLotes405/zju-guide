@@ -106,7 +106,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="app-sidebar-footer mx-4 border-t border-slate-200 px-1 py-4">
-          <p className="text-[11px] tracking-wide text-slate-400">求是学径 v0.1 · ZJU</p>
+          <p className="text-[11px] tracking-wide text-slate-400">
+            求是学径 <span className="novecento-number">v0.1</span> · ZJU
+          </p>
         </div>
       </aside>
 

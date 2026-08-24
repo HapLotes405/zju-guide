@@ -129,6 +129,138 @@ p {
   font-variant-numeric: tabular-nums;
 }
 
+.tabular-nums {
+  font-family: "Novecento Wide", "Arial Wide", "Arial", sans-serif;
+}
+
+.resource-title,
+.resource-preview {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.resource-preview-card {
+  font-family: "OPPO Sans", "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
+}
+
+.resource-preview {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.markdown-content {
+  min-width: 0;
+  color: #334155;
+  font-size: 0.9375rem;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.markdown-content > :first-child {
+  margin-top: 0;
+}
+
+.markdown-content > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content :where(h1, h2, h3, h4) {
+  margin: 1.5em 0 0.65em;
+  color: #172033;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.markdown-content h1 {
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 0.4em;
+  font-size: 1.5rem;
+}
+
+.markdown-content h2 {
+  font-size: 1.25rem;
+}
+
+.markdown-content h3 {
+  font-size: 1.1rem;
+}
+
+.markdown-content :where(p, ul, ol, blockquote, pre, table) {
+  margin: 0.9em 0;
+}
+
+.markdown-content :where(ul, ol) {
+  padding-left: 1.5rem;
+}
+
+.markdown-content ul {
+  list-style: disc;
+}
+
+.markdown-content ol {
+  list-style: decimal;
+}
+
+.markdown-content blockquote {
+  border-left: 3px solid #82c3e5;
+  padding-left: 1rem;
+  color: #64748b;
+}
+
+.markdown-content a {
+  color: #005fa8;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.markdown-content code {
+  border-radius: 4px;
+  background: #f1f5f9;
+  padding: 0.15em 0.35em;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 0.875em;
+}
+
+.markdown-content pre {
+  max-width: 100%;
+  overflow-x: auto;
+  border-radius: 6px;
+  background: #172033;
+  padding: 1rem;
+  color: #e2e8f0;
+}
+
+.markdown-content pre code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+.markdown-content table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.markdown-content :where(th, td) {
+  border: 1px solid #dfe3e8;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+
+.markdown-content th {
+  background: #f8fafc;
+}
+
+.markdown-content img {
+  max-width: 100%;
+  height: auto;
+}
+
 .course-information {
   font-family: "Novecento Wide", "OPPO Sans", "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
 }
