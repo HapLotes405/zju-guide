@@ -3,7 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, AuthError } from "@/lib/auth";
 import type { ResourceType, CopyrightStatus } from "@prisma/client";
 import { saveUpload, uploadPath, UploadError, MAX_FILE_SIZE, type SavedUpload } from "@/lib/upload";
+import { getClientIp, hitRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import { unlink } from "node:fs/promises";
+
+// 投稿配额（防公开注册后被脚本刷 DRAFT + 附件耗尽磁盘/审核队列）
+const MAX_PENDING_PER_USER = 5; // 每用户最多同时 5 条待审核投稿
+const SUBMIT_WINDOW_MS = 60 * 60 * 1000; // 每 IP 每小时
+const SUBMIT_LIMIT_PER_IP = 20; // 每 IP 每小时最多成功提交 20 条（兼容 NAT 后多人活跃投稿）
 
 // ──────────────────────────────────────────────────────────────────────────
 // Types
@@ -101,6 +107,22 @@ export async function POST(request: NextRequest) {
     // 1. Authenticate — 任何登录用户均可投稿（内容仍需管理员审核）
     const { userId } = await requireAuth(request);
 
+    // 1b. 每用户待审 DRAFT 配额：防止单账号刷 DRAFT 堆满审核队列（此处先拦截，避免白存文件）
+    const pendingCount = await prisma.submission.count({
+      where: { submitterId: userId, result: null },
+    });
+    if (pendingCount >= MAX_PENDING_PER_USER) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "QUOTA_EXCEEDED",
+            message: `你已有 ${MAX_PENDING_PER_USER} 条投稿待审核，请等管理员处理后再投`,
+          },
+        },
+        { status: 429 },
+      );
+    }
+
     // 2. Parse and validate the request body（兼容 JSON 与 multipart/form-data 文件上传）
     let body: CreateResourceBody;
     let upload: SavedUpload | null = null;
@@ -111,7 +133,7 @@ export async function POST(request: NextRequest) {
       const contentLength = Number(request.headers.get("content-length") ?? 0);
       if (contentLength > MAX_FILE_SIZE + 1024 * 1024) {
         return NextResponse.json(
-          { error: { code: "PAYLOAD_TOO_LARGE", message: "文件大小超过 50MB 上限" } },
+          { error: { code: "PAYLOAD_TOO_LARGE", message: "文件大小超过 20MB 上限" } },
           { status: 413 },
         );
       }
@@ -137,7 +159,7 @@ export async function POST(request: NextRequest) {
       }
       if (totalBytes > MAX_FILE_SIZE) {
         return NextResponse.json(
-          { error: { code: "PAYLOAD_TOO_LARGE", message: "上传文件总大小超过 50MB 上限" } },
+          { error: { code: "PAYLOAD_TOO_LARGE", message: "上传文件总大小超过 20MB 上限" } },
           { status: 413 },
         );
       }
@@ -348,6 +370,16 @@ export async function POST(request: NextRequest) {
         },
         { status: 400 },
       );
+    }
+
+    // 3b. 每 IP 投稿频率：校验全部通过才计数，防止注册小号批量刷稿/刷附件。
+    //     放在落盘之前，超限时不产生孤儿文件。
+    const submitRl = hitRateLimit(`submit:${getClientIp(request)}`, {
+      limit: SUBMIT_LIMIT_PER_IP,
+      windowMs: SUBMIT_WINDOW_MS,
+    });
+    if (!submitRl.ok) {
+      return rateLimitResponse(submitRl.retryAfterSec);
     }
 
     // 4. 全部校验通过后再落盘文件（此前不落盘，校验失败时不会留下孤儿文件）

@@ -50,6 +50,9 @@ function formatSubmission(s: {
     status: string;
     submitterId: string;
     createdAt: Date;
+    filePath: string | null;
+    fileName: string | null;
+    fileSize: number | null;
     courseResources: { course: { code: string; name: string } }[];
   };
   submitter: { id: string; username: string };
@@ -65,6 +68,10 @@ function formatSubmission(s: {
       copyrightStatus: s.resource.copyrightStatus,
       applicableStage: s.resource.applicableStage,
       status: s.resource.status,
+      // 附件元信息（审核页预览/下载用；filePath 为 uuid.ext，前端拼 /api/files/<filePath>）
+      filePath: s.resource.filePath,
+      fileName: s.resource.fileName,
+      fileSize: s.resource.fileSize,
     },
     courses: s.resource.courseResources.map((cr) => ({
       code: cr.course.code,

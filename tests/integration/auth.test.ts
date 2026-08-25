@@ -9,6 +9,7 @@ import { POST as loginHandler } from "@/app/api/auth/login/route";
 import { GET as meHandler } from "@/app/api/auth/me/route";
 import { prisma } from "@/lib/prisma";
 import { hashPassword, signToken } from "@/lib/auth";
+import { clearRateLimits } from "@/lib/rate-limit";
 import { createRequest } from "../test-utils";
 
 // ---------------------------------------------------------------------------
@@ -16,6 +17,9 @@ import { createRequest } from "../test-utils";
 // ---------------------------------------------------------------------------
 
 beforeEach(async () => {
+  // 重置内存限流计数，避免跨用例（尤其限流用例）互相干扰
+  clearRateLimits();
+
   // Clean up so each test starts in a known state (FK-safe order)
   await prisma.review.deleteMany();
   await prisma.submission.deleteMany();
@@ -307,5 +311,102 @@ describe("GET /api/auth/me", () => {
 
     expect(res.status).toBe(401);
     expect(json.error.code).toBe("UNAUTHORIZED");
+  });
+});
+
+// =============================================================================
+// POST /api/auth/login — 登录失败限流（同一 IP）
+// =============================================================================
+
+describe("POST /api/auth/login — 失败限流", () => {
+  const LOGIN_FAIL_LIMIT = 10;
+
+  beforeEach(async () => {
+    await prisma.user.create({
+      data: {
+        username: "ratelimiteduser",
+        passwordHash: hashPassword("correctpass"),
+      },
+    });
+  });
+
+  function failReq(ip: string) {
+    return createRequest("http://localhost/api/auth/login", {
+      method: "POST",
+      ip,
+      body: { username: "ratelimiteduser", password: "wrongpass" },
+    });
+  }
+
+  it(`同一 IP 连续失败 ${LOGIN_FAIL_LIMIT} 次后第 ${LOGIN_FAIL_LIMIT + 1} 次返回 429`, async () => {
+    const IP = "198.51.100.7";
+    for (let i = 0; i < LOGIN_FAIL_LIMIT; i++) {
+      const res = await loginHandler(failReq(IP));
+      expect(res.status).toBe(401);
+    }
+    const blocked = await loginHandler(failReq(IP));
+    const json = await blocked.json();
+    expect(blocked.status).toBe(429);
+    expect(json.error.code).toBe("TOO_MANY_REQUESTS");
+  });
+
+  it("成功登录不消耗失败计数；不同 IP 互不影响", async () => {
+    const IP_A = "198.51.100.8";
+    const IP_B = "198.51.100.9";
+
+    // IP_A 失败 5 次后仍可成功登录（成功不计入失败桶）
+    for (let i = 0; i < 5; i++) {
+      await loginHandler(failReq(IP_A));
+    }
+    const okA = await loginHandler(
+      createRequest("http://localhost/api/auth/login", {
+        method: "POST",
+        ip: IP_A,
+        body: { username: "ratelimiteduser", password: "correctpass" },
+      }),
+    );
+    expect(okA.status).toBe(200);
+
+    // 干净的 IP_B 直接成功
+    const okB = await loginHandler(
+      createRequest("http://localhost/api/auth/login", {
+        method: "POST",
+        ip: IP_B,
+        body: { username: "ratelimiteduser", password: "correctpass" },
+      }),
+    );
+    expect(okB.status).toBe(200);
+  });
+});
+
+// =============================================================================
+// POST /api/auth/register — 注册限流（同一 IP）
+// =============================================================================
+
+describe("POST /api/auth/register — 注册限流", () => {
+  const REGISTER_LIMIT = 40;
+
+  it(`同一 IP 第 ${REGISTER_LIMIT + 1} 次注册尝试返回 429（校验失败的尝试同样计数）`, async () => {
+    const IP = "203.0.113.9";
+    // 前 40 次用非法用户名触发 400：限流发生在校验之前，非法尝试也消耗配额（防刷语义）
+    for (let i = 0; i < REGISTER_LIMIT; i++) {
+      const req = createRequest("http://localhost/api/auth/register", {
+        method: "POST",
+        ip: IP,
+        body: { username: "x", password: "secret123" },
+      });
+      const res = await registerHandler(req);
+      expect(res.status).toBe(400);
+    }
+
+    const blocked = createRequest("http://localhost/api/auth/register", {
+      method: "POST",
+      ip: IP,
+      body: { username: "freshuser", password: "secret123" },
+    });
+    const res = await registerHandler(blocked);
+    const json = await res.json();
+    expect(res.status).toBe(429);
+    expect(json.error.code).toBe("TOO_MANY_REQUESTS");
   });
 });

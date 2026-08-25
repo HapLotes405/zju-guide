@@ -16,6 +16,8 @@ interface RequestOptions {
   body?: unknown;
   token?: string;
   searchParams?: Record<string, string>;
+  /** 模拟客户端 IP（写入 X-Forwarded-For），供限流测试用不同 IP 隔离计数桶 */
+  ip?: string;
 }
 
 /**
@@ -34,6 +36,11 @@ export function createRequest(url: string, opts: RequestOptions = {}): NextReque
 
   if (opts.token) {
     headers.set("Authorization", `Bearer ${opts.token}`);
+  }
+
+  if (opts.ip) {
+    // 与生产 nginx 一致：X-Forwarded-For 末项为真实客户端
+    headers.set("X-Forwarded-For", opts.ip);
   }
 
   if (opts.body !== undefined) {

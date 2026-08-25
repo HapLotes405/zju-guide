@@ -14,6 +14,7 @@ import {
 import { POST as resourcesPostHandler } from "@/app/api/resources/route";
 import { prisma } from "@/lib/prisma";
 import { signToken } from "@/lib/auth";
+import { clearRateLimits } from "@/lib/rate-limit";
 import { createRequest, createTestUser, seedCourse } from "../test-utils";
 
 let contributorId: string;
@@ -39,6 +40,9 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+  // 重置内存限流计数，避免投稿频率用例/配额用例跨用例互相干扰
+  clearRateLimits();
+
   // 每个用例独立：按外键顺序清空资源相关表 + 课程依赖表后种入课程。
   // 保留 user（requireAuth 只校验 JWT，不查库；删除会破坏 GET 的 submitter join）。
   await prisma.review.deleteMany();
@@ -412,5 +416,60 @@ describe("POST /api/resources — applicableStage 新分类校验", () => {
 
     expect(res.status).toBe(400);
     expect(json.error.code).toBe("VALIDATION_ERROR");
+  });
+});
+
+// =============================================================================
+// POST /api/resources — 投稿配额（防公开注册后被刷 DRAFT / 附件）
+// =============================================================================
+
+describe("POST /api/resources — 投稿配额", () => {
+  function submitReq(token: string, ip: string, title: string) {
+    return createRequest("http://localhost/api/resources", {
+      method: "POST",
+      token,
+      ip,
+      body: { title, type: "LECTURE_NOTE", courseCodes: ["CS101"] },
+    });
+  }
+
+  it("每用户最多 5 条待审核投稿，第 6 条返回 429", async () => {
+    for (let i = 0; i < 5; i++) {
+      const res = await resourcesPostHandler(
+        submitReq(contributorToken, "198.51.100.20", `投稿 ${i}`),
+      );
+      expect(res.status).toBe(201);
+    }
+
+    const res = await resourcesPostHandler(
+      submitReq(contributorToken, "198.51.100.20", "第 6 条"),
+    );
+    const json = await res.json();
+    expect(res.status).toBe(429);
+    expect(json.error.code).toBe("QUOTA_EXCEEDED");
+  });
+
+  it("同一 IP 每小时最多 20 条，第 21 条返回 429（跨账号累计）", async () => {
+    // 4 个账号 × 各 5 条 = 20 条（单账号不触发 per-user 上限，累计触发 per-IP 上限）
+    const extraUsers = await Promise.all(
+      ["q1", "q2", "q3"].map((u) => createTestUser(`resource_quota_${u}`)),
+    );
+    const tokens = [contributorToken, ...extraUsers.map((u) => u.token)];
+
+    for (let i = 0; i < 20; i++) {
+      const res = await resourcesPostHandler(
+        submitReq(tokens[i % tokens.length]!, "198.51.100.30", `投稿 ${i}`),
+      );
+      expect(res.status).toBe(201);
+    }
+
+    // 第 21 条用新账号发起，排除 per-user 上限干扰，落在 per-IP 上限
+    const fresh = await createTestUser("resource_quota_fresh");
+    const res = await resourcesPostHandler(
+      submitReq(fresh.token, "198.51.100.30", "第 21 条"),
+    );
+    const json = await res.json();
+    expect(res.status).toBe(429);
+    expect(json.error.code).toBe("TOO_MANY_REQUESTS");
   });
 });

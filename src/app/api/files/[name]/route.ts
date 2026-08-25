@@ -2,14 +2,17 @@ import { NextResponse, type NextRequest } from "next/server";
 import { readFile, stat } from "node:fs/promises";
 import { prisma } from "@/lib/prisma";
 import { uploadPath, UploadError } from "@/lib/upload";
+import { requireRole, AuthError } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
 // GET /api/files/[name] — 下载投稿附件
 // name 为存储名（uuid.ext），反查资源记录取得原始文件名与类型
-// 仅允许下载「已审核通过」资源的附件：审核门禁在文件层同样生效
+// 门禁规则：
+//   - 已审核通过（APPROVED）→ 公开下载（课程页/资料页/审核已通过项使用）
+//   - 未通过（DRAFT/REJECTED 等）→ 仅管理员可下载（审核盲审预览用）
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ name: string }> },
 ) {
   try {
@@ -30,14 +33,19 @@ export async function GET(
     }
 
     const resource = await prisma.resource.findFirst({
-      where: { filePath: name, status: "APPROVED" },
-      select: { fileName: true, mimeType: true },
+      where: { filePath: name },
+      select: { fileName: true, mimeType: true, status: true },
     });
     if (!resource) {
       return NextResponse.json(
         { error: { code: "NOT_FOUND", message: "文件不存在" } },
         { status: 404 },
       );
+    }
+
+    // 未审核通过的附件属于审核工作流内部材料：仅管理员可查看，防提前泄露
+    if (resource.status !== "APPROVED") {
+      await requireRole(request, "ADMIN"); // 非管理员抛 AuthError → 下方 403
     }
 
     const fileStat = await stat(fullPath).catch(() => null);
@@ -60,6 +68,12 @@ export async function GET(
       },
     });
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json(
+        { error: { code: error.code, message: error.message } },
+        { status: error.status },
+      );
+    }
     console.error("GET /api/files/[name] error:", error);
     return NextResponse.json(
       { error: { code: "INTERNAL_ERROR", message: "服务器内部错误" } },
