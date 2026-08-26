@@ -39,6 +39,15 @@ import { handleMarkdownTab } from "@/lib/markdown-editor";
 import { ExamPrepSection } from "@/components/exam-prep-section";
 import { useAuth } from "@/hooks/use-auth";
 
+// 课程不在课程库（非目录：研究生/前沿/已停开）→ 软提示，而非裸 404
+class CourseNotFoundError extends Error {
+  readonly status = 404;
+  constructor(public readonly courseCode: string) {
+    super(`课程「${courseCode}」暂未收录课程库`);
+    this.name = "CourseNotFoundError";
+  }
+}
+
 // ─── Types ───────────────────────────────────────────────
 
 interface Prerequisite {
@@ -329,7 +338,7 @@ export default function CourseDetailPage() {
     queryFn: async () => {
       const res = await fetch(`/api/courses/${code}`);
       if (!res.ok) {
-        if (res.status === 404) throw new Error(`课程「${code}」不存在`);
+        if (res.status === 404) throw new CourseNotFoundError(code);
         throw new Error("获取课程数据失败，请稍后重试");
       }
       const json = await res.json();
@@ -425,6 +434,7 @@ export default function CourseDetailPage() {
 
   // ─── Error ────────────────────────────────────────────────
   if (isError || !course) {
+    const notFound = error instanceof CourseNotFoundError;
     return (
       <main className="mx-auto max-w-[1400px] px-4 py-8 lg:px-6">
         <button
@@ -435,22 +445,53 @@ export default function CourseDetailPage() {
           返回
         </button>
 
-        <div className="rounded-xl border border-red-200 bg-red-50 p-8 text-center">
-          <AlertCircle className="mx-auto mb-3 h-12 w-12 text-red-400" />
-          <p className="mb-2 text-sm font-medium text-red-800">
-            {error instanceof Error ? error.message : "加载失败"}
-          </p>
-          <p className="mb-4 text-xs text-red-500">
-            {!isError && !course ? "课程数据为空" : "请检查课程代码是否正确，或稍后重试"}
-          </p>
-          <button
-            onClick={() => refetch()}
-            className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-white px-4 py-2 text-sm text-red-700 transition hover:bg-red-100"
-          >
-            <RefreshCw className="h-4 w-4" />
-            重新加载
-          </button>
-        </div>
+        {notFound ? (
+          // 课程不在课程库：软提示（研究生/前沿/已停开），而非硬错误
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-8 text-center">
+            <BookOpen className="mx-auto mb-3 h-12 w-12 text-amber-400" />
+            <p className="mb-2 text-sm font-medium text-amber-800">该课程暂未收录课程库</p>
+            <p className="mb-3 text-xs text-amber-700">
+              课程代码 <code className="rounded bg-amber-100 px-1.5 py-0.5 font-mono text-amber-800">{code}</code>{" "}
+              可能为研究生课程、前沿专题或已停开课程，课程库暂未收录。
+            </p>
+            <p className="mb-5 text-xs text-amber-600">
+              可返回培养方案查看，或到课程库检索同名课程。
+            </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <button
+                onClick={() => router.back()}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-amber-600"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                返回培养方案
+              </button>
+              <Link
+                href="/courses"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-100"
+              >
+                <BookOpen className="h-4 w-4" />
+                去课程库检索
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-8 text-center">
+            <AlertCircle className="mx-auto mb-3 h-12 w-12 text-red-400" />
+            <p className="mb-2 text-sm font-medium text-red-800">
+              {error instanceof Error ? error.message : "加载失败"}
+            </p>
+            <p className="mb-4 text-xs text-red-500">
+              {!isError && !course ? "课程数据为空" : "请检查课程代码是否正确，或稍后重试"}
+            </p>
+            <button
+              onClick={() => refetch()}
+              className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-white px-4 py-2 text-sm text-red-700 transition hover:bg-red-100"
+            >
+              <RefreshCw className="h-4 w-4" />
+              重新加载
+            </button>
+          </div>
+        )}
       </main>
     );
   }
