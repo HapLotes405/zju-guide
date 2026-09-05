@@ -52,7 +52,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   if (isLoading || programsLoading) {
     return (
       <div className="app-loading flex min-h-screen items-center justify-center">
-        <QiushiMark className="h-8 w-16 animate-pulse text-blue-600" />
+        <QiushiMark className="h-[50.4px] w-[50.4px] animate-pulse text-blue-600" />
       </div>
     );
   }
@@ -67,8 +67,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       {/* Sidebar */}
       <aside className={`app-sidebar fixed inset-y-0 left-0 z-40 flex w-[264px] flex-col transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="app-brand flex h-[72px] items-center gap-3.5 px-5">
-          <div className="app-brand-mark flex h-8 w-16 items-center">
-            <QiushiMark className="h-8 w-16 text-blue-700" />
+          <div className="app-brand-mark flex h-[50.4px] w-[50.4px] items-center">
+            <QiushiMark className="h-[50.4px] w-[50.4px] text-blue-700" />
           </div>
           <span className="app-brand-title text-[19px] font-bold tracking-tight text-slate-950">求是学径</span>
         </div>
@@ -124,7 +124,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             <button onClick={() => setUserMenuOpen(!userMenuOpen)}
               className="app-user-button flex min-h-10 items-center gap-2.5 px-2.5 text-sm text-slate-600">
               <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-700 ring-1 ring-inset ring-blue-200/70">
-                {user.username.charAt(0).toUpperCase()}
+                {user.avatar ? (
+                  <img src={user.avatar} alt="我的头像" className="h-7 w-7 rounded-full object-cover" />
+                ) : user.username.charAt(0).toUpperCase()}
               </div>
               <span className="hidden sm:inline">{user.username}</span>
               <ChevronDown className={`h-3 w-3 text-slate-400 transition ${userMenuOpen ? "rotate-180" : ""}`} />

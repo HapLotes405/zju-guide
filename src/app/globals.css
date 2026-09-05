@@ -1,10 +1,10 @@
 @import "tailwindcss";
 
 @font-face {
-  font-family: "OPPO Sans";
-  src: url("/fonts/oppo-sans-4.0.ttf") format("truetype");
+  font-family: "Starrail";
+  src: url("/fonts/starrail.ttf") format("truetype");
   font-style: normal;
-  font-weight: 100 900;
+  font-weight: 400;
   font-display: swap;
 }
 
@@ -62,7 +62,7 @@ html {
 body {
   background: var(--app-canvas);
   color: var(--app-ink);
-  font-family: "OPPO Sans", "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
+  font-family: "Starrail", "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
 }
 
 button,
@@ -114,7 +114,7 @@ p {
 }
 
 .app-brand-title {
-  font-family: "OPPO Sans", "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
+  font-family: "Starrail", "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
 }
 
 .course-code {
@@ -140,7 +140,7 @@ p {
 }
 
 .resource-preview-card {
-  font-family: "OPPO Sans", "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
+  font-family: "Starrail", "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
 }
 
 .resource-preview {
@@ -262,11 +262,11 @@ p {
 }
 
 .course-information {
-  font-family: "Novecento Wide", "OPPO Sans", "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
+  font-family: "Novecento Wide", "Starrail", "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
 }
 
 .course-contribute-form :where(input, textarea, select) {
-  font-family: "OPPO Sans", "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
+  font-family: "Starrail", "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
 }
 
 .app-nav-link {
@@ -509,4 +509,41 @@ p {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
+}
+
+
+
+.qiushi-orbit {
+  transform-box: view-box;
+  transform-origin: 678px 640px;
+  animation: qiushi-orbit-turn 18s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+  --orbit-turn: 360deg;
+}
+
+.qiushi-orbit-blue {
+  animation-duration: 14s;
+  --orbit-turn: -360deg;
+}
+
+.qiushi-orbit-cyan { animation-duration: 16s; }
+
+.qiushi-orbit-fine {
+  animation-duration: 22s;
+  --orbit-turn: -360deg;
+}
+
+.qiushi-orbit-detail { animation-duration: 20s; }
+
+.qiushi-orbit-core {
+  animation-duration: 12s;
+  --orbit-turn: -360deg;
+}
+
+@keyframes qiushi-orbit-turn {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(var(--orbit-turn)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qiushi-orbit { animation: none; }
 }

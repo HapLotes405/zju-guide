@@ -35,7 +35,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <QiushiMark className="mx-auto mb-4 h-10 w-20 text-blue-700" />
+          <QiushiMark className="mx-auto mb-4 h-[67.2px] w-[67.2px] text-blue-700" />
           <h1 className="text-xl font-bold text-slate-900">登录求是学径</h1>
           <p className="mt-1 text-sm text-slate-500">浙江大学课程学习路径共建平台</p>
         </div>

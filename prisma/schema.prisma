@@ -62,6 +62,7 @@ enum ReviewResult {
 model User {
   id           String   @id @default(uuid())
   username     String   @unique
+  avatar       String?
   passwordHash String
   role         Role     @default(VISITOR)
   createdAt    DateTime @default(now())

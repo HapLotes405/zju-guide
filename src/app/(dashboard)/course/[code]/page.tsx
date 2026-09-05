@@ -18,10 +18,6 @@ import {
   ArrowLeft,
   GitFork,
   MapPin,
-  CheckCircle2,
-  HelpCircle,
-  TrendingUp,
-  Sparkles,
   Send,
   Loader2,
   Paperclip,
@@ -36,7 +32,6 @@ import { RESOURCE_TYPE_LABELS, APPLICABLE_STAGE_LABELS } from "@/lib/constants";
 import { api, ApiError } from "@/lib/api-client";
 import { buildCC98SearchUrl } from "@/lib/cc98";
 import { handleMarkdownTab } from "@/lib/markdown-editor";
-import { ExamPrepSection } from "@/components/exam-prep-section";
 import { useAuth } from "@/hooks/use-auth";
 
 // 课程不在课程库（非目录：研究生/前沿/已停开）→ 软提示，而非裸 404
@@ -135,19 +130,10 @@ interface ResourceData {
 
 type StageKey = "COURSE" | "QUIZ" | "MIDTERM" | "FINAL";
 
-// ─── Mock Data (teachers now fetched from API) ────────────
-
-const MOCK_MISCONCEPTIONS = [
-  "很多同学以为这门课是纯理论课，实际上有大量实验和项目需要动手。",
-  "课程名里的「材料」容易让人以为只是记忆性质的内容，实际有不少数学推导。",
-  "不要等到期末才开始复习，平时作业和实验的积累很重要。",
-];
-
 // ─── Sub-components ──────────────────────────────────────
 
 const COURSE_SECTION_IDS = [
   "identity",
-  "why",
   "course",
   "quiz",
   "midterm",
@@ -157,7 +143,7 @@ const COURSE_SECTION_IDS = [
 ] as const;
 
 /** Skeleton for preview cards during loading */
-function SectionCardSkeleton({ count = 8 }: { count?: number }) {
+function SectionCardSkeleton({ count = 7 }: { count?: number }) {
   return (
     <div className="grid animate-pulse grid-cols-1 gap-4 lg:grid-cols-2">
       {Array.from({ length: count }).map((_, i) => (
@@ -301,25 +287,6 @@ function InfoRow({
   );
 }
 
-/** Clickable course link chip */
-function CourseChip({ code, name, type }: { code: string; name: string; type?: "prerequisite" | "dependent" }) {
-  return (
-    <Link
-      href={`/course/${code}`}
-      className={cn(
-        "group inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors",
-        type === "prerequisite"
-          ? "border-green-200 bg-green-50 text-green-800 hover:bg-green-100"
-          : "border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100",
-      )}
-    >
-      <span className="course-code font-medium">{code}</span>
-      <span className="text-xs opacity-70 truncate max-w-[120px]">{name}</span>
-      <ExternalLink className="h-3 w-3 opacity-40 group-hover:opacity-100 transition-opacity" />
-    </Link>
-  );
-}
-
 // ─── Main Page ───────────────────────────────────────────
 
 export default function CourseDetailPage() {
@@ -398,7 +365,7 @@ export default function CourseDetailPage() {
     });
   };
 
-  // 只展开、不折叠：供卡片内的子表单（投稿 / 复习编辑）打开时保证可见，避免被折叠裁剪
+  // 只展开、不折叠：供卡片内的子表单（投稿）打开时保证可见，避免被折叠裁剪
   const ensureExpanded = (id: string) => {
     setExpandedSections((current) => {
       if (current.has(id)) return current;
@@ -427,7 +394,7 @@ export default function CourseDetailPage() {
           <div className="h-5 w-96 rounded bg-slate-200" />
         </div>
 
-        <SectionCardSkeleton count={8} />
+        <SectionCardSkeleton count={7} />
       </main>
     );
   }
@@ -644,84 +611,7 @@ export default function CourseDetailPage() {
           </div>
         </CourseSectionCard>
 
-        {/* 2. 为什么学 */}
-        <CourseSectionCard
-          id="why"
-          icon={HelpCircle}
-          title="为什么学"
-          expanded={expandedSections.has("why")}
-          onToggle={toggleSection}
-        >
-          {/* Prerequisites */}
-          <div className="mb-4">
-            <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-              <ArrowLeft className="h-3.5 w-3.5" />
-              前置课程
-            </h3>
-            {course.prerequisites.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {course.prerequisites.map((p) => (
-                  <CourseChip
-                    key={p.code}
-                    code={p.code}
-                    name={p.name}
-                    type="prerequisite"
-                  />
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                message="该课程无前置依赖"
-                icon={CheckCircle2}
-              />
-            )}
-          </div>
-
-          {/* Dependents */}
-          <div className="mb-4">
-            <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-              <TrendingUp className="h-3.5 w-3.5" />
-              后续课程
-            </h3>
-            {course.dependents.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {course.dependents.map((d) => (
-                  <CourseChip
-                    key={d.code}
-                    code={d.code}
-                    name={d.name}
-                    type="dependent"
-                  />
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                message="该课程暂无后续依赖课程"
-                icon={Sparkles}
-              />
-            )}
-          </div>
-
-          {/* Common misconceptions */}
-          <div>
-            <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-              常见误区
-            </h3>
-            <ul className="space-y-2">
-              {MOCK_MISCONCEPTIONS.map((m, i) => (
-                <li
-                  key={i}
-                  className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50 p-3 text-sm text-amber-800"
-                >
-                  <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" />
-                  {m}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </CourseSectionCard>
-
-        {/* 3. 平时学习 */}
+        {/* 2. 平时学习 */}
         <CourseSectionCard
           id="course"
           icon={BookMarked}
@@ -737,7 +627,7 @@ export default function CourseDetailPage() {
           />
         </CourseSectionCard>
 
-        {/* 4. 小测 */}
+        {/* 3. 小测 */}
         <CourseSectionCard
           id="quiz"
           icon={FileQuestion}
@@ -753,7 +643,7 @@ export default function CourseDetailPage() {
           />
         </CourseSectionCard>
 
-        {/* 5. 期中 */}
+        {/* 4. 期中 */}
         <CourseSectionCard
           id="midterm"
           icon={ClipboardList}
@@ -769,27 +659,23 @@ export default function CourseDetailPage() {
           />
         </CourseSectionCard>
 
-        {/* 6. 期末（跨两列：复习路线 + 期末资源） */}
+        {/* 5. 期末 */}
         <CourseSectionCard
           id="final"
           icon={Target}
           title="期末"
-          featured
           expanded={expandedSections.has("final")}
           onToggle={toggleSection}
         >
-          <div className="space-y-5">
-            <ExamPrepSection courseCode={course.code} onExpand={() => ensureExpanded("final")} />
-            <ResourceCardContent
-              courseCode={course.code}
-              stage="FINAL"
-              resources={resourcesByStage.FINAL}
-              onExpand={() => ensureExpanded("final")}
-            />
-          </div>
+          <ResourceCardContent
+            courseCode={course.code}
+            stage="FINAL"
+            resources={resourcesByStage.FINAL}
+            onExpand={() => ensureExpanded("final")}
+          />
         </CourseSectionCard>
 
-        {/* 7. 老师评价 */}
+        {/* 6. 老师评价 */}
         <CourseSectionCard
           id="teachers"
           icon={Users}
@@ -909,7 +795,7 @@ export default function CourseDetailPage() {
           </div>
         </CourseSectionCard>
 
-        {/* 8. 图谱区 */}
+        {/* 7. 图谱区 */}
         <CourseSectionCard
           id="graph"
           icon={GitFork}

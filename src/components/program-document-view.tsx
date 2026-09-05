@@ -424,7 +424,7 @@ function SemesterCourseRow({
     <button
       type="button"
       onClick={onOpen}
-      className="group rounded-lg border border-slate-200 bg-white p-3 text-left transition hover:border-blue-300 hover:shadow-sm"
+      className="group rounded-lg border border-slate-200 bg-white p-3 text-left transition duration-200 ease-out hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-sm motion-reduce:transform-none"
     >
       <div className="mb-1 flex items-start justify-between gap-2">
         <span className="truncate text-sm font-semibold text-slate-800" title={item.courseName}>

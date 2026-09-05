@@ -21,6 +21,7 @@ import { api, persistTokens, clearTokens, ApiError } from "@/lib/api-client";
 export interface User {
   id: string;
   username: string;
+  avatar: string | null;
   role: string;
   createdAt: string;
   updatedAt: string;
@@ -39,6 +40,7 @@ export interface AuthState {
   register: (username: string, password: string) => Promise<void>;
   /** Clear tokens and reset user state. Does NOT redirect — caller should route. */
   logout: () => void;
+  updateProfile: (form: FormData) => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -104,6 +106,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await api.post("/api/auth/register", { username, password });
   }, []);
 
+  const updateProfile = useCallback(async (form: FormData) => {
+    const updated = await api.patchForm<User>("/api/auth/me", form);
+    setUser(updated);
+  }, []);
+
   const logout = useCallback(() => {
     clearTokens();
     setUser(null);
@@ -118,6 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         register,
         logout,
+        updateProfile,
       }}
     >
       {children}
