@@ -18,6 +18,7 @@ export default function RegisterPage() {
     e.preventDefault();
     setError("");
 
+    if (/\p{Script=Han}/u.test(password)) { setError("密码不能包含汉字"); return; }
     if (password !== confirmPassword) {
       setError("两次密码不一致");
       return;
@@ -46,7 +47,7 @@ export default function RegisterPage() {
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <QiushiMark className="mx-auto mb-4 h-10 w-20 text-blue-700" />
+          <QiushiMark className="mx-auto mb-4 h-[67.2px] w-[67.2px] text-blue-700" />
           <h1 className="text-xl font-bold text-slate-900">注册求是学径</h1>
           <p className="mt-1 text-sm text-slate-500">加入浙大课程学习路径共建平台</p>
         </div>

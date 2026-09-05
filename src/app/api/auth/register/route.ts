@@ -39,6 +39,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (/\p{Script=Han}/u.test(password)) {
+      return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "密码不能包含汉字" } }, { status: 400 });
+    }
+
     const trimmedUsername = username.trim();
 
     // --- uniqueness check
