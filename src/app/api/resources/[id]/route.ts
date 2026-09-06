@@ -23,6 +23,32 @@ const VALID_RESOURCE_TYPES: ResourceType[] = [
 ];
 const VALID_APPLICABLE_STAGES = ["COURSE", "QUIZ", "MIDTERM", "FINAL"];
 
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { userId } = await requireAuth(request);
+    const { id } = await params;
+    if (!UUID_PATTERN.test(id)) throw new AuthError("NOT_FOUND", "投稿不存在", 404);
+    const resource = await prisma.resource.findUnique({
+      where: { id }, select: { submitterId: true, filePath: true },
+    });
+    if (!resource) throw new AuthError("NOT_FOUND", "投稿不存在", 404);
+    if (resource.submitterId !== userId) throw new AuthError("FORBIDDEN", "只能删除自己提交的投稿", 403);
+    // 课程关联、投稿审核记录由数据库外键级联删除。
+    await prisma.resource.delete({ where: { id, submitterId: userId } });
+    if (resource.filePath) {
+      try { await unlink(uploadPath(resource.filePath)); }
+      catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") console.error("清理已删除投稿的附件失败:", error);
+      }
+    }
+    return NextResponse.json({ data: { success: true } });
+  } catch (error) {
+    if (error instanceof AuthError) return NextResponse.json({ error: { code: error.code, message: error.message } }, { status: error.status });
+    console.error("DELETE /api/resources/[id] error:", error);
+    return NextResponse.json({ error: { code: "INTERNAL_ERROR", message: "删除失败，请稍后重试" } }, { status: 500 });
+  }
+}
+
 interface UpdateResourceBody {
   title?: string;
   type?: string;
