@@ -14,6 +14,7 @@ import {
   Paperclip,
   Pencil,
   Save,
+  Trash2,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -224,6 +225,9 @@ function ResourceEditForm({
   onCancel: () => void;
   onSaved: () => Promise<void>;
 }) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [deleting, setDeleting] = useState(false);
   const [title, setTitle] = useState(resource.title);
   const [type, setType] = useState(resource.type);
   const [stage, setStage] = useState(resource.applicableStage ?? "COURSE");
@@ -235,6 +239,7 @@ function ResourceEditForm({
 
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (saving || deleting) return;
     if (!title.trim()) {
       toast.error("请填写资源标题");
       return;
@@ -256,6 +261,22 @@ function ResourceEditForm({
       toast.error(error instanceof ApiError ? error.message : "更新失败，请稍后重试");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const deleteResource = async () => {
+    if (saving || deleting || !window.confirm(`确定删除「${resource.title}」吗？投稿及附件将被永久删除，无法恢复。`)) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/api/resources/${resource.id}`);
+      for (const queryKey of [["my-submissions"], ["resources"], ["course-resources"], ["admin", "submissions"]]) {
+        void queryClient.invalidateQueries({ queryKey });
+      }
+      toast.success("投稿已删除");
+      router.replace("/settings");
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "删除失败，请稍后重试");
+      setDeleting(false);
     }
   };
 
@@ -368,11 +389,16 @@ function ResourceEditForm({
         </button>
       </div>
 
-      <div className="flex justify-end gap-3 border-t border-blue-100 pt-5">
+      <div className="flex flex-wrap justify-end gap-3 border-t border-blue-100 pt-5">
+        <button type="button" onClick={deleteResource} disabled={saving || deleting}
+          className="mr-auto inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50">
+          {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+          {deleting ? "删除中…" : "删除投稿"}
+        </button>
         <button
           type="button"
           onClick={onCancel}
-          disabled={saving}
+          disabled={saving || deleting}
           className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
         >
           <X className="h-4 w-4" />
@@ -380,7 +406,7 @@ function ResourceEditForm({
         </button>
         <button
           type="submit"
-          disabled={saving}
+          disabled={saving || deleting}
           className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
         >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
