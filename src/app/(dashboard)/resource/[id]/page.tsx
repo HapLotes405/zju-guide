@@ -1,5 +1,7 @@
 "use client";
 
+import { AttachmentActions } from "@/components/attachments/attachment-actions";
+
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -7,7 +9,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   ArrowLeft,
-  Download,
   ExternalLink,
   FileText,
   Loader2,
@@ -182,13 +183,7 @@ export default function ResourceDetailPage() {
           {(data.fileName && data.filePath) || data.url ? (
             <footer className="flex flex-wrap gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:px-8">
               {data.fileName && data.filePath && (
-                <a
-                  href={`/api/files/${data.filePath}`}
-                  className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
-                >
-                  <Download className="h-4 w-4" />
-                  下载附件：{data.fileName}
-                </a>
+                <AttachmentActions filePath={data.filePath} fileName={data.fileName} fileSize={data.fileSize} status={data.status} />
               )}
               {data.url && (
                 <a

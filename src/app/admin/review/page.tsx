@@ -1,5 +1,7 @@
 "use client";
 
+import { AttachmentActions } from "@/components/attachments/attachment-actions";
+
 // =============================================================================
 // admin/review/page.tsx — 审核后台（仅管理员可访问）
 // =============================================================================
@@ -223,7 +225,7 @@ function RejectDialog({
   );
 }
 
-/** 审核附件预览：带 JWT 拉取 /api/files/<filePath> → blob → 新标签打开 */
+/** 审核页使用同一套鉴权预览及下载入口。 */
 function AttachmentLink({
   filePath,
   fileName,
@@ -233,55 +235,7 @@ function AttachmentLink({
   fileName: string;
   fileSize?: number | null;
 }) {
-  const [state, setState] = useState<"idle" | "loading" | "error">("idle");
-
-  const open = async () => {
-    if (state === "loading") return;
-    setState("loading");
-    try {
-      const token = localStorage.getItem("auth_access_token");
-      const res = await fetch(`/api/files/${encodeURIComponent(filePath)}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.error?.message ?? `HTTP ${res.status}`);
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      // 用程序化 <a download> 触发下载而非 window.open：异步 fetch 后 window.open
-      // 会被部分浏览器当作"非用户手势"拦截弹窗；download 触发则不受此限制。
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      a.rel = "noopener noreferrer";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setState("idle");
-    } catch (err) {
-      setState("error");
-      toast.error(err instanceof Error ? err.message : "附件打开失败");
-    }
-  };
-
-  return (
-    <div className="flex items-center gap-1.5">
-      <button
-        onClick={open}
-        disabled={state === "loading"}
-        className="inline-flex items-center gap-1 text-xs text-blue-500 hover:underline disabled:opacity-50"
-        title={`${fileName}${fileSize ? `（${(fileSize / 1024 / 1024).toFixed(1)}MB）` : ""}`}
-      >
-        {state === "loading" ? (
-          <Loader2 className="h-3 w-3 animate-spin" />
-        ) : (
-          <FileText className="h-3 w-3" />
-        )}
-        {state === "error" ? "附件打开失败" : `附件·${fileName}`}
-      </button>
-    </div>
-  );
+  return <AttachmentActions filePath={filePath} fileName={fileName} fileSize={fileSize} status="DRAFT" />;
 }
 
 /** Single submission row (pending) */

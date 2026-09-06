@@ -1,5 +1,7 @@
 "use client";
 
+import { AttachmentActions } from "@/components/attachments/attachment-actions";
+
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
@@ -21,7 +23,6 @@ import {
   Send,
   Loader2,
   Paperclip,
-  Download,
   X,
   ClipboardList,
   FileQuestion,
@@ -976,9 +977,7 @@ function ResourceItem({ resource: r }: { resource: ResourceData }) {
         </span>
         <div className="flex items-center gap-3">
           {r.fileName && r.filePath && (
-            <a href={`/api/files/${r.filePath}`} className="flex items-center gap-1 text-blue-500 hover:underline">
-              <Download className="h-3 w-3" />下载附件
-            </a>
+            <AttachmentActions filePath={r.filePath} fileName={r.fileName} fileSize={r.fileSize} />
           )}
           {r.url && (
             <a href={r.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-500 hover:underline">

@@ -4,11 +4,11 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
+import { AttachmentActions } from "@/components/attachments/attachment-actions";
 import {
   FileText,
   Search,
   ExternalLink,
-  Download,
   BookMarked,
   ArrowRight,
   AlertCircle,
@@ -259,13 +259,7 @@ function ResourceCard({ resource: r }: { resource: BrowseResource }) {
         </span>
         <div className="flex items-center gap-3">
           {r.fileName && r.filePath && (
-            <a
-              href={`/api/files/${r.filePath}`}
-              className="flex items-center gap-1 text-blue-500 hover:underline"
-            >
-              <Download className="h-3 w-3" />
-              下载附件
-            </a>
+            <AttachmentActions filePath={r.filePath} fileName={r.fileName} fileSize={r.fileSize} />
           )}
           {r.url && (
             <a
