@@ -6,10 +6,11 @@ import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import { QiushiMark } from "@/components/qiushi-mark";
+import { NewUserGuideBanner } from "@/components/new-user-guide";
 import {
   LayoutDashboard, BookOpen, FileText,
   Settings, LogOut, Menu, X, ChevronDown, User, Send,
-  ClipboardList, Upload,
+  ClipboardList, Upload, Compass,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -17,6 +18,7 @@ const NAV_ITEMS = [
   { href: "/courses", label: "课程库", icon: BookOpen },
   { href: "/contribute", label: "投稿", icon: Send },
   { href: "/resources", label: "学习资料", icon: FileText },
+  { href: "/guide", label: "新手引导", icon: Compass },
   { href: "/settings", label: "设置", icon: Settings },
 ];
 
@@ -42,7 +44,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     // /program/* 是"先看看培养方案"预览页、/course/* 是课程详情页，
     // 未选专业的新用户也能浏览，需豁免此守卫（否则预览时点课程会被弹回 onboarding）
     const isProgramPreview = pathname.startsWith("/program") || pathname.startsWith("/course");
-    if (!isLoading && !programsLoading && isAuthenticated && !hasProgram && pathname !== "/onboarding" && !isProgramPreview) {
+    if (!isLoading && !programsLoading && isAuthenticated && !hasProgram && pathname !== "/onboarding" && pathname !== "/guide" && !isProgramPreview) {
       router.replace("/onboarding");
     }
   }, [isLoading, programsLoading, isAuthenticated, hasProgram, pathname, router]);
@@ -151,6 +153,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
         <main className="app-main flex-1">
           <div className="app-content mx-auto w-full max-w-[1440px] px-4 py-5 lg:px-8 lg:py-8">
+            <NewUserGuideBanner userId={user.id} pathname={pathname} />
             {children}
           </div>
         </main>
