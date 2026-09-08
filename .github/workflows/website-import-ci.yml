@@ -1,0 +1,42 @@
+name: Website import validation
+on:
+  push:
+    branches: [master, 'feat/website-resource-import']
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://msewiki:msewiki@127.0.0.1:5432/msewiki_test
+      JWT_SECRET: test-only-website-import-secret
+      JWT_REFRESH_SECRET: test-only-website-import-refresh-secret
+      WEBSITE_IMPORT_ENABLED: 'true'
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: msewiki
+          POSTGRES_PASSWORD: msewiki
+          POSTGRES_DB: msewiki_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prisma generate
+      - run: pnpm typecheck
+      - run: pnpm test:unit
+      - run: pnpm test
+      - run: pnpm build

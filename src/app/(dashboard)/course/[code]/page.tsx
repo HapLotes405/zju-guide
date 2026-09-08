@@ -120,6 +120,10 @@ interface ResourceData {
   title: string;
   type: string;
   url: string | null;
+  sourceSite?: string | null;
+  sourcePage?: string | null;
+  discoveredAt?: string | null;
+  importBatchId?: string | null;
   summary: string | null;
   applicableStage: string | null;
   submitterName: string;
@@ -973,7 +977,7 @@ function ResourceItem({ resource: r }: { resource: ResourceData }) {
       </Link>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
         <span>
-          贡献者：{r.submitterName} · <span className="novecento-number">{r.createdAt.slice(0, 10)}</span>
+          {r.sourceSite && <>来源：{r.sourceSite} · </>}贡献者：{r.submitterName} · <span className="novecento-number">{r.createdAt.slice(0, 10)}</span>
         </span>
         <div className="flex items-center gap-3">
           {r.fileName && r.filePath && (
@@ -981,7 +985,7 @@ function ResourceItem({ resource: r }: { resource: ResourceData }) {
           )}
           {r.url && (
             <a href={r.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-500 hover:underline">
-              <ExternalLink className="h-3 w-3" />查看原文
+              <ExternalLink className="h-3 w-3" />{r.sourceSite ? "前往原站" : "查看原文"}
             </a>
           )}
         </div>

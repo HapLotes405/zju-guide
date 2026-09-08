@@ -74,6 +74,10 @@ export async function GET() {
       // 防未来直接写库路径插入 javascript:/data: 被渲染成可点击链接
       url: r.url && /^https?:\/\/\S+$/i.test(r.url) ? r.url : null,
       summary: r.summary,
+      sourceSite: r.sourceSite,
+      sourcePage: r.sourcePage,
+      discoveredAt: r.discoveredAt,
+      importBatchId: r.importBatchId,
       filePath: r.filePath,
       fileName: r.fileName,
       fileSize: r.fileSize,

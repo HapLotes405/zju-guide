@@ -103,6 +103,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         type: resource.type,
         url: resource.url && /^https?:\/\/\S+$/i.test(resource.url) ? resource.url : null,
         summary: resource.summary,
+        sourceSite: resource.sourceSite,
+        sourcePage: resource.sourcePage,
+        discoveredAt: resource.discoveredAt,
+        importBatchId: resource.importBatchId,
         filePath: resource.filePath,
         fileName: resource.fileName,
         fileSize: resource.fileSize,
@@ -144,7 +148,7 @@ export async function PATCH(
       );
     }
 
-    const existing = await prisma.resource.findUnique({ where: { id } });
+    const existing = await prisma.resource.findUnique({ where: { id }, include: { importBatch: true } });
     if (!existing) {
       return NextResponse.json(
         { error: { code: "NOT_FOUND", message: "投稿不存在" } },
@@ -156,6 +160,10 @@ export async function PATCH(
         { error: { code: "FORBIDDEN", message: "只能修改自己提交的投稿" } },
         { status: 403 },
       );
+    }
+
+    if (existing.importBatch?.status === 'WITHDRAWN') {
+      return NextResponse.json({error:{code:'IMPORT_WITHDRAWN',message:'该资源所属导入批次已撤回，请另行投稿。'}},{status:409});
     }
 
     let body: UpdateResourceBody;
@@ -226,6 +234,10 @@ export async function PATCH(
     }
 
     const url = body.url?.trim() || null;
+    if (existing.importBatchId && (url !== existing.url || pendingFile)) {
+      return NextResponse.json({error:{code:'IMPORT_SOURCE_FIXED',message:'网站导入资源保留原始链接，不支持替换链接或添加附件；请另行投稿。'}},{status:400});
+    }
+
     if (url && !/^https?:\/\/\S+$/i.test(url)) {
       return NextResponse.json(
         { error: { code: "VALIDATION_ERROR", message: "链接必须以 http:// 或 https:// 开头" } },
@@ -250,6 +262,11 @@ export async function PATCH(
     }
 
     const result = await prisma.$transaction(async (tx) => {
+      if (existing.importBatchId) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(830809)`;
+        const batch = await tx.websiteImportJob.findUnique({where:{id:existing.importBatchId}});
+        if (batch?.status === 'WITHDRAWN') throw new AuthError('IMPORT_WITHDRAWN','该导入批次已撤回',409);
+      }
       const resource = await tx.resource.update({
         where: { id },
         data: {

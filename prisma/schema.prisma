@@ -264,6 +264,12 @@ model Resource {
   submitterId     String
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
+  sourceSite      String?
+  sourcePage      String?
+  discoveredAt    DateTime?
+  importBatchId   String?
+  importUrlKey    String?         @unique
+  importBatch     WebsiteImportJob? @relation(fields: [importBatchId], references: [id])
 
   submitter       User              @relation("ResourceSubmitter", fields: [submitterId], references: [id])
   courseResources CourseResource[]
@@ -272,6 +278,51 @@ model Resource {
   @@index([status])
   @@index([submitterId])
   @@index([type])
+  @@index([importBatchId])
+}
+
+// Durable, administrator-only imports. Status strings are validated by services.
+model WebsiteImportJob {
+  id             String @id @default(uuid())
+  sourceId       String
+  ownerId        String
+  status         String @default("QUEUED")
+  scanned        Int @default(0)
+  error          String?
+  leaseToken     String?
+  leaseExpiresAt DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  candidates     WebsiteImportCandidate[]
+  resources      Resource[]
+
+  @@index([status, leaseExpiresAt])
+  @@index([ownerId, createdAt])
+}
+
+model WebsiteImportCandidate {
+  id                  String @id @default(uuid())
+  jobId               String
+  job                 WebsiteImportJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  title               String
+  url                 String
+  canonicalUrl        String
+  summary             String
+  type                ResourceType @default(BLOG)
+  applicableStage     String @default("COURSE")
+  courseCodes         Json
+  matchReason         String
+  confirmed           Boolean @default(false)
+  status              String @default("READY")
+  duplicateResourceId String?
+  resourceId          String? @unique
+  error               String?
+  submittedAt         DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([jobId, canonicalUrl])
+  @@index([jobId, status])
 }
 
 model CourseResource {

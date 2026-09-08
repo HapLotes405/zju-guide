@@ -29,6 +29,10 @@ interface ResourceDetail {
   title: string;
   type: string;
   url: string | null;
+  sourceSite?: string | null;
+  sourcePage?: string | null;
+  discoveredAt?: string | null;
+  importBatchId?: string | null;
   summary: string | null;
   filePath: string | null;
   fileName: string | null;
@@ -152,6 +156,7 @@ export default function ResourceDetailPage() {
               )}
             </div>
             <h1 className="resource-title text-2xl font-bold text-slate-900">{data.title}</h1>
+            {data.sourceSite && <p className="mt-2 text-sm text-slate-500">来源：{data.sourceSite}{data.discoveredAt && <> · 收录于 {data.discoveredAt.slice(0, 10)}</>}</p>}
             <p className="mt-3 text-sm text-slate-500">
               贡献者：{data.submitterName} ·{" "}
               <span className="novecento-number">{data.createdAt.slice(0, 10)}</span>
@@ -193,7 +198,7 @@ export default function ResourceDetailPage() {
                   className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
                 >
                   <ExternalLink className="h-4 w-4" />
-                  查看原文
+                  {data.sourceSite ? "前往原站" : "查看原文"}
                 </a>
               )}
             </footer>

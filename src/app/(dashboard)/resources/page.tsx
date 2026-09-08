@@ -30,6 +30,10 @@ interface BrowseResource {
   title: string;
   type: string;
   url: string | null;
+  sourceSite?: string | null;
+  sourcePage?: string | null;
+  discoveredAt?: string | null;
+  importBatchId?: string | null;
   summary: string | null;
   filePath: string | null;
   fileName: string | null;
@@ -237,6 +241,7 @@ function ResourceCard({ resource: r }: { resource: BrowseResource }) {
       </Link>
 
       {/* 关联课程 chip → 课程详情页 */}
+      {r.sourceSite && <p className="mt-2 text-xs text-slate-500">来源：{r.sourceSite}</p>}
       {r.courses.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {r.courses.map((c) => (
@@ -269,7 +274,7 @@ function ResourceCard({ resource: r }: { resource: BrowseResource }) {
               className="flex items-center gap-1 text-blue-500 hover:underline"
             >
               <ExternalLink className="h-3 w-3" />
-              查看原文
+              {r.sourceSite ? "前往原站" : "查看原文"}
             </a>
           )}
         </div>

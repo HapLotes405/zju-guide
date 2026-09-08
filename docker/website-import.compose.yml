@@ -1,0 +1,20 @@
+# Merge with docker/docker-compose.yml after applying the additive migration.
+# docker compose -f docker/docker-compose.yml -f docker/website-import.compose.yml up -d
+services:
+  app:
+    environment:
+      WEBSITE_IMPORT_ENABLED: ${WEBSITE_IMPORT_ENABLED:-false}
+  website-import-worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    profiles: [website-import]
+    environment:
+      DATABASE_URL: postgresql://msewiki:msewiki@db:5432/msewiki
+      WEBSITE_IMPORT_ENABLED: ${WEBSITE_IMPORT_ENABLED:-false}
+      NODE_ENV: production
+    command: [node, node_modules/tsx/dist/cli.mjs, scripts/website-import-worker.ts]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped

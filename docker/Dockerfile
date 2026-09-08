@@ -39,6 +39,8 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/src/lib ./src/lib
+COPY --from=builder /app/scripts/website-import-worker.ts ./scripts/website-import-worker.ts
 
 USER nextjs
 
