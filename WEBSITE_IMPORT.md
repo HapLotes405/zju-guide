@@ -4,12 +4,11 @@
 
 ## 开发与部署基线
 
-- 本地功能分支：`feat/website-resource-import`，基于新版参考提交 `82e08f1`。
-- 实际目标仓库：`Eason-Iron/zju-guide`；本地 `origin` 已指向该 Fork，`upstream` 仅供读取。
-- Fork 的默认分支是 `master`，检查时 HEAD 为 `ba972e3`，仍采用 SQLite。新版参考基线采用 PostgreSQL。
-- Fork 现有 `.github/workflows/ci.yml` 只在 `main/develop` 做 CI，没有发布步骤；仓库中没有 Vercel/Netlify 配置。托管平台控制台的连接状态尚未核实。
-- 用户已批准同步新版；功能分支已推送到 Fork，交付为指向 Fork `master` 的 PR（包含新版基线同步）。没有修改上游仓库。用户尚不知道服务器部署入口，因此线上部署待服务器管理员提供信息后继续。
-- GitHub Pages 未启用，公开 deployments 记录为空；新增 CI 仅验证代码，不能据此认定服务器会自动部署。首轮 CI [34250445061](https://github.com/Eason-Iron/zju-guide/actions/runs/34250445061) 全部通过。
+- PR 目标为 `Ltto123/zju-guide` 的 `master`；贡献分支为 `Eason-Iron/zju-guide:feat/website-resource-import`，基于上游提交 `82e08f1`。
+- 上游基线已采用 PostgreSQL，本功能提供增量迁移，不引入 SQLite → PostgreSQL 转换。仍运行旧版 SQLite 的部署需要单独规划数据迁移。
+- `Eason-Iron/zju-guide` 仅作为外部贡献的代码来源，不是本功能的发布目标。
+- 新增 CI 仅验证代码，不会发布服务器；最终部署环境、备份和 worker 的启动方式由维护者确认。
+- 本地试验与 Fork CI 已通过，尚未部署到生产。CI 记录：[34332877804](https://github.com/Eason-Iron/zju-guide/actions/runs/34332877804)。
 
 ## 接口与数据
 
@@ -85,7 +84,7 @@ UI 截图与 JSON 原始结果在 `output/website-import/`；截图使用 API �
 
 ## 上线和撤回步骤
 
-1. 确认 Fork 基线与实际部署服务，核对生产数据库类型、版本及 migration 历史。
+1. 确认实际部署服务和应用版本，核对生产数据库类型、版本及 migration 历史。
 2. PostgreSQL 新版先做数据库备份，并验证备份可恢复；数据库若是 SQLite，另行完成转换和核对，禁止直接套用增量迁移。
 3. 在测试环境验证 `prisma migrate deploy` 和 worker。现有 Compose 启动命令包含 `db push` 与 seed，不应将它当作本次受控迁移命令；上线前由现有部署流程明确执行迁移，避免在生产反复播种。
 4. 保持功能开关关闭部署 app 与 worker，确认迁移后再向管理员启用。
