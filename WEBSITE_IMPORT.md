@@ -8,7 +8,8 @@
 - 实际目标仓库：`Eason-Iron/zju-guide`；本地 `origin` 已指向该 Fork，`upstream` 仅供读取。
 - Fork 的默认分支是 `master`，检查时 HEAD 为 `ba972e3`，仍采用 SQLite。新版参考基线采用 PostgreSQL。
 - Fork 现有 `.github/workflows/ci.yml` 只在 `main/develop` 做 CI，没有发布步骤；仓库中没有 Vercel/Netlify 配置。托管平台控制台的连接状态尚未核实。
-- 因此不能将本分支直接合并到旧 Fork 并视为安全上线。先确认是否同步新版及现有数据库迁移安排，再验证真实自动部署通道。没有向上游或 Fork 推送任何本次改动。
+- 用户已批准同步新版；功能分支已推送到 Fork，交付为指向 Fork `master` 的 PR（包含新版基线同步）。没有修改上游仓库。用户尚不知道服务器部署入口，因此线上部署待服务器管理员提供信息后继续。
+- GitHub Pages 未启用，公开 deployments 记录为空；新增 CI 仅验证代码，不能据此认定服务器会自动部署。首轮 CI [34250445061](https://github.com/Eason-Iron/zju-guide/actions/runs/34250445061) 全部通过。
 
 ## 接口与数据
 
@@ -31,6 +32,7 @@
 
 ```text
 DATABASE_URL=postgresql://msewiki:msewiki@127.0.0.1:5432/msewiki_test
+TEST_DATABASE_URL=postgresql://msewiki:msewiki@127.0.0.1:5432/msewiki_test
 JWT_SECRET=仅供本地的随机值
 JWT_REFRESH_SECRET=另一个本地随机值
 WEBSITE_IMPORT_ENABLED=true
@@ -39,7 +41,7 @@ WEBSITE_IMPORT_ENABLED=true
 ```sh
 pnpm install --frozen-lockfile
 pnpm exec prisma generate
-pnpm exec prisma db push
+pnpm exec prisma migrate deploy
 pnpm dev
 # 另一个终端，使用相同环境变量
 pnpm worker:website-import
@@ -73,7 +75,11 @@ pnpm exec playwright test tests/e2e/website-import.spec.ts --workers=1
 
 匹配依据来自仓库中的课程清单。以上是匹配建议覆盖情况，不是人工核验后的匹配准确率；发现总数亦不等于已经逐页验证可访问的资源数。
 
-已运行 208 项单元测试与类型检查通过，生产构建通过。2 项浏览器交互合同测试通过（管理员确认、送审和撤回；普通用户隐藏入口），使用模拟 API 响应。数据库集成测试已编写，覆盖确认门禁、并发重复提交、跨批查重与撤回；尚未执行通过。便携 PostgreSQL 已初始化，但启动被自动审批系统因审批服务使用额度耗尽拒绝。数据库迁移实测、端到端投稿审核、真实页面逐项核验、人工耗时对照及线上 5 条试验仍待完成。
+已运行 208 项单元测试、类型检查及生产构建通过；完整测试共 20 个文件、288 项通过，包含真实 PostgreSQL 集成测试。2 项浏览器交互合同测试通过（管理员确认、送审和撤回；普通用户隐藏入口），使用模拟 API 响应。2026-09-09 本地 PostgreSQL 18 在 127.0.0.1:55432 完成全部 5 个迁移；CI 使用 PostgreSQL 16。
+
+真实来源 MVP 于 2026-09-09 09:04 UTC 在隔离本地测试库完成：worker 实际扫描两个来源，各达到 30 条候选上限；逐页核验 Turing 20 条与 BMS 10 条，全部可访问。按课程名和页面主标题程序核验，27 条完成候选确认 → DRAFT 送审 → 真实审核路由 APPROVED → 批次撤回；重复送审未增加投稿记录。另 3 条保留待人工核验（包括多课程候选），没有强行入库。所有试验批次已撤回，审计保留。逐项证据在 `output/website-import/live-db-trial.json`，试验脚本保存在本地 `tmp/live-db-trial.ts`。
+
+这不是人工匹配准确率或浏览器端到端验证；人工耗时对照、线上 5 条试验及 48 小时观察尚未完成。集成测试只允许 localhost 且名称以 `_test` 结尾的数据库，通过 `TEST_DATABASE_URL` 同时配置初始化和测试进程，避免两者指向不同数据库。
 
 UI 截图与 JSON 原始结果在 `output/website-import/`；截图使用 API 拦截响应，只用于展示和验证交互。
 
@@ -88,3 +94,15 @@ UI 截图与 JSON 原始结果在 `output/website-import/`；截图使用 API �
 7. 观察 48 小时内的失败、重复和链接问题。异常时关闭开关、停止 worker，使用“撤回批次”撤回新资源；保留增量表及审计，不进行破坏性反向迁移。
 
 新增的 `website-import-ci.yml` 只做验证，不会发布站点。没有创建周期监控，也没有安排尚未上线功能的定时任务。
+
+## 转发给服务器管理员
+
+请协助确认 `106.14.218.12:8080` 的以下信息：
+
+1. 服务器由谁管理，使用 SSH、宝塔、1Panel、Docker Compose 或其他平台；提供平台项目链接或安全授予访问的方式。
+2. 应用所在目录、启动/重启方式、容器或服务名，以及当前部署的仓库、分支、提交。
+3. 数据库类型（SQLite/PostgreSQL）、版本、数据位置，以及备份和恢复方式；用户上传文件存储位置。
+4. 是否已有 GitHub 自动部署：对应 workflow、webhook、runner 或平台项目；若使用 Secrets，只提供名称及是否配置，不发送值。
+5. 能否先部署测试环境、执行迁移并运行一个后台 worker；可接受的维护时间及失败回滚方式。
+
+密码、数据库连接密码、令牌和私钥应通过服务器平台或 GitHub Secrets 安全配置，不放入 PR 或聊天。
