@@ -28,6 +28,8 @@ import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api-client";
 import { RESOURCE_TYPE_LABELS, APPLICABLE_STAGE_LABELS } from "@/lib/constants";
 import { handleMarkdownTab } from "@/lib/markdown-editor";
+import { useAuth } from "@/hooks/use-auth";
+import { WebsiteImportPanel } from "@/components/website-import-panel";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -199,6 +201,8 @@ function FieldError({ message }: { message?: string }) {
 // ─── Main Page ──────────────────────────────────────────────
 
 export default function ContributePage() {
+  const { user } = useAuth();
+  const [tab, setTab] = useState<"manual" | "website">("manual");
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -332,7 +336,20 @@ export default function ContributePage() {
       </div>
 
       {/* ── Form ────────────────────────────────────── */}
+      {user?.role === "ADMIN" && (
+        <div className="mb-6 flex gap-2" role="tablist" aria-label="投稿方式">
+          {([ ["manual", "手动投稿"], ["website", "从网站导入"] ] as const).map(([value, label]) => (
+            <button key={value} type="button" role="tab" aria-selected={tab === value}
+              onClick={() => setTab(value)}
+              className={cn("rounded-lg px-4 py-2 text-sm font-medium", tab === value ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200")}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {user?.role === "ADMIN" && tab === "website" && <WebsiteImportPanel />}
       <form
+        hidden={user?.role === "ADMIN" && tab === "website"}
         onSubmit={onSubmit}
         className="rounded-xl border border-blue-200 bg-blue-50/40 p-6 shadow-sm"
       >

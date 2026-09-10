@@ -8,6 +8,7 @@ export async function GET(request: NextRequest) {
     await requireRole(request, "ADMIN");
 
   const submissions = await prisma.submission.findMany({
+    where: request.nextUrl.searchParams.get('batch') ? { resource: { importBatchId: request.nextUrl.searchParams.get('batch')! } } : undefined,
     include: {
       resource: {
         include: { courseResources: { include: { course: true } } },
@@ -53,6 +54,9 @@ function formatSubmission(s: {
     filePath: string | null;
     fileName: string | null;
     fileSize: number | null;
+    sourceSite: string | null;
+    sourcePage: string | null;
+    importBatchId: string | null;
     courseResources: { course: { code: string; name: string } }[];
   };
   submitter: { id: string; username: string };
@@ -65,6 +69,9 @@ function formatSubmission(s: {
       type: s.resource.type,
       url: s.resource.url,
       summary: s.resource.summary,
+      sourceSite: s.resource.sourceSite,
+      sourcePage: s.resource.sourcePage,
+      importBatchId: s.resource.importBatchId,
       copyrightStatus: s.resource.copyrightStatus,
       applicableStage: s.resource.applicableStage,
       status: s.resource.status,

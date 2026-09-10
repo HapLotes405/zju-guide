@@ -77,6 +77,10 @@ docs/
 DEMO_SCRIPT.md
 training-plans/
 scripts/
+!scripts/
+scripts/*
+!scripts/website-import-worker.ts
+!scripts/website-import-trial.ts
 output/
 # 培养方案原始数据（PDF 解析/整理的 JSON，仅供本地导入，不纳入版本控制）
 program-data/

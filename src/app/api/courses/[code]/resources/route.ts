@@ -18,6 +18,8 @@ export async function GET(
     const data = resources.map((cr) => ({
       id: cr.resource.id, title: cr.resource.title, type: cr.resource.type,
       url: cr.resource.url, summary: cr.resource.summary,
+      sourceSite: cr.resource.sourceSite, sourcePage: cr.resource.sourcePage,
+      discoveredAt: cr.resource.discoveredAt, importBatchId: cr.resource.importBatchId,
       filePath: cr.resource.filePath, fileName: cr.resource.fileName, fileSize: cr.resource.fileSize,
       copyrightStatus: cr.resource.copyrightStatus, applicableStage: cr.resource.applicableStage,
       submitterName: cr.resource.submitter.username, createdAt: cr.resource.createdAt.toISOString(),

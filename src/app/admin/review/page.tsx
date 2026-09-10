@@ -6,7 +6,7 @@ import { AttachmentActions } from "@/components/attachments/attachment-actions";
 // admin/review/page.tsx — 审核后台（仅管理员可访问）
 // =============================================================================
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -43,6 +43,10 @@ interface SubmissionItem {
     title: string;
     type: string;
     url: string | null;
+    sourceSite?: string | null;
+    sourcePage?: string | null;
+    discoveredAt?: string | null;
+    importBatchId?: string | null;
     summary: string | null;
     applicableStage: string | null;
     // 附件元信息（审核预览用）
@@ -284,6 +288,7 @@ function PendingRow({
         </div>
 
         {/* Courses */}
+        {item.resource.sourceSite && <p className="break-all text-xs text-slate-500">来源：{item.resource.sourceSite} · 批次：{item.resource.importBatchId ?? "—"}</p>}
         {item.courses.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {item.courses.map((c) => (
@@ -429,6 +434,7 @@ function ReviewedGroup({
                   </div>
 
                   {/* Reason */}
+                  {item.resource.sourceSite && <p className="break-all text-xs text-slate-500">来源：{item.resource.sourceSite} · 批次：{item.resource.importBatchId ?? "—"}</p>}
                   {item.reason && (
                     <p className="mt-1 text-xs text-slate-500">
                       理由: {item.reason}
@@ -483,6 +489,13 @@ export default function AdminReviewPage() {
   const { user, isLoading: isAuthLoading } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const [batch, setBatch] = useState<string | null>(null);
+  useEffect(() => {
+    const syncBatch = () => setBatch(new URLSearchParams(window.location.search).get("batch") ?? "");
+    syncBatch();
+    window.addEventListener("popstate", syncBatch);
+    return () => window.removeEventListener("popstate", syncBatch);
+  }, []);
 
   // ---- Reject dialog state ----
   const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
@@ -498,10 +511,10 @@ export default function AdminReviewPage() {
     error,
     refetch,
   } = useQuery<SubmissionsResponse>({
-    queryKey: ["admin", "submissions"],
+    queryKey: ["admin", "submissions", batch],
     queryFn: () =>
-      api.get<SubmissionsResponse>("/api/admin/submissions"),
-    enabled: !isAuthLoading,
+      api.get<SubmissionsResponse>(`/api/admin/submissions${batch ? `?batch=${encodeURIComponent(batch)}` : ""}`),
+    enabled: !isAuthLoading && user?.role === "ADMIN" && batch !== null,
   });
 
   // ---- Mutations ----
@@ -603,6 +616,10 @@ export default function AdminReviewPage() {
 
       <div className="mx-auto max-w-6xl px-4 py-6 lg:px-6">
         {/* ── Tab bar ────────────────────────────────── */}
+        {batch && <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+          <span className="break-all">正在审核导入批次：{batch}</span>
+          <button type="button" className="underline" onClick={() => { setBatch(""); window.history.replaceState(null, "", "/admin/review"); }}>查看全部投稿</button>
+        </div>}
         <div className="mb-6 flex items-center gap-1 rounded-lg bg-slate-100 p-1 w-fit">
           <button
             onClick={() => setTab("pending")}

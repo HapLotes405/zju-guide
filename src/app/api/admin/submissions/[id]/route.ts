@@ -44,6 +44,12 @@ export async function PATCH(
 
   // 事务：更新Submission + Resource状态 + 写入audit_log
   const updated = await prisma.$transaction(async (tx) => {
+    // Serialize reviews with batch withdrawal; a withdrawn resource cannot be republished.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(830809)`;
+    const current = await tx.submission.findUnique({where:{id},include:{resource:{include:{importBatch:true}}}});
+    if (!current || current.result !== null || current.resource.importBatch?.status === 'WITHDRAWN') {
+      throw new AuthError('ALREADY_REVIEWED','该资源已审核或批次已撤回',409);
+    }
     const s = await tx.submission.update({
       where: { id },
       data: {
