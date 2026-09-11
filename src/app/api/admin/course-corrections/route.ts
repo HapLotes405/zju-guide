@@ -24,6 +24,12 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     await requireRole(request, "ADMIN");
+    const exactCode = request.nextUrl.searchParams.get("exactCode");
+    if (exactCode !== null) {
+      if (!exactCode.trim() || exactCode.length > 100) throw new AuthError("VALIDATION_ERROR", "课号无效", 400);
+      const course = await prisma.course.findUnique({ where: { code: exactCode.trim() } });
+      return NextResponse.json({ data: { course } });
+    }
     const programId = request.nextUrl.searchParams.get("programId");
     if (programId) {
       const program = await prisma.programVersion.findUnique({

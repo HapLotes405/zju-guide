@@ -50,6 +50,73 @@ afterAll(async () => {
 });
 
 describe("管理员课程修正", () => {
+  it.each(["merge_resources", "replace"] as const)("并入已有课号：%s 锁定目标信息并处理同方案重复课程", async existingAction => {
+    const { code, programs, input } = await fixture();
+    const targetCode = `${code}_EXISTING`;
+    const target = await prisma.course.create({ data: { code: targetCode, name: "目标原名称", credits: 6, department: "目标学院" } });
+    const targetRelation = await prisma.programCourse.create({ data: { programVersionId: programs[0]!.id, courseCode: targetCode, suggestedSemester: 4, isCompulsory: false } });
+    await prisma.courseRecord.create({ data: { userId, courseCode: code, status: "PASSED", source: "MANUAL" } });
+    const shared = await prisma.resource.create({ data: { title: "共用", type: "OTHER", submitterId: userId, courseResources: { create: [{ courseCode: code }, { courseCode: targetCode }] } } });
+    const sourceResource = await prisma.resource.create({ data: { title: "新增", type: "OTHER", status: "REJECTED", filePath: "keep.pdf", submitterId: userId, courseResources: { create: { courseCode: code } }, submissions: { create: { submitterId: userId, reviews: { create: { reviewerId: userId, result: "REJECTED" } } } } } });
+    const inputWithTarget = { ...input, targetCode, targetName: "不得覆盖", details: { credits: 99, department: "不得覆盖", category: "", description: "", semester: "" }, existingAction };
+    const preview = await apply(inputWithTarget);
+    expect(preview).toMatchObject({ existingTarget: true, targetName: target.name, details: { credits: 6, department: "目标学院" }, appendResources: 1 });
+    expect(await prisma.course.findUnique({ where: { code: targetCode } })).toEqual(target);
+    expect(await prisma.programCourse.findUnique({ where: { id: targetRelation.id } })).toMatchObject({ suggestedSemester: 4, isCompulsory: false });
+    expect(await prisma.programCourse.count({ where: { programVersionId: programs[0]!.id, courseCode: code } })).toBe(0);
+    expect(await prisma.programCourse.count({ where: { programVersionId: programs[1]!.id, courseCode: code } })).toBe(1);
+    const changed = await prisma.programVersion.findUniqueOrThrow({ where: { id: programs[0]!.id } });
+    expect(listDocumentCourses(changed.programJson as unknown as ProgramDocument).every(c => c.courseCode === targetCode && c.courseName === target.name && c.credits === 6)).toBe(true);
+    expect(await prisma.courseResource.count({ where: { courseCode: targetCode, resourceId: shared.id } })).toBe(1);
+    expect(await prisma.courseResource.count({ where: { courseCode: targetCode } })).toBe(existingAction === "merge_resources" ? 2 : 1);
+    expect(await prisma.courseResource.count({ where: { courseCode: code } })).toBe(existingAction === "merge_resources" ? 0 : 2);
+    expect(await prisma.resource.findUnique({ where: { id: sourceResource.id } })).toMatchObject({ status: "REJECTED", filePath: "keep.pdf" });
+    expect(await prisma.review.count({ where: { submission: { resourceId: sourceResource.id } } })).toBe(1);
+    expect(await prisma.courseRecord.count({ where: { courseCode: targetCode } })).toBe(0);
+    expect(await prisma.courseRecord.count({ where: { courseCode: code } })).toBe(1);
+  });
+  it.each(["all", "name", "both"] as const)("全局 %s 按原信息精确匹配，合并所有命中课号的资源", async scope => {
+    const { code, programs, input } = await fixture();
+    const name = `${code} 原课程名`;
+    const otherCode = `${code}_SAME_NAME`;
+    const targetCode = `${code}_TARGET`;
+    await prisma.course.update({ where: { code }, data: { name } });
+    await prisma.course.createMany({ data: [{ code: otherCode, name, credits: 3 }, { code: targetCode, name: "目标", credits: 8 }] });
+    const makeDoc = (courseCode: string, courseName: string) => ({ moduleGroups: [{ name: "模块", courses: [{ courseCode, courseName, credits: 3, semesters: [] }] }] });
+    await prisma.programVersion.update({ where: { id: programs[0]!.id }, data: { programJson: makeDoc(code, name) } });
+    await prisma.programVersion.update({ where: { id: programs[1]!.id }, data: { programJson: makeDoc(code, `${name}（另一名称）`) } });
+    const third = await prisma.programVersion.create({ data: { majorName: `${code}_同名`, year: 2026, totalCredits: 120, programJson: makeDoc(otherCode, name), programCourses: { create: { courseCode: otherCode, suggestedSemester: 2, isCompulsory: false } } } });
+    for (const courseCode of [code, otherCode]) await prisma.resource.create({ data: { title: courseCode, type: "OTHER", submitterId: userId, courseResources: { create: { courseCode } } } });
+    const preview = await apply({ ...input, sourceName: name, targetCode, existingAction: "merge_resources", scope });
+    const expectedPrograms = scope === "all" ? [programs[0]!.id, programs[1]!.id] : scope === "name" ? [programs[0]!.id, third.id] : [programs[0]!.id];
+    expect(preview.programs.map(p => p.id).sort()).toEqual(expectedPrograms.sort());
+    expect(await prisma.courseResource.count({ where: { courseCode: targetCode } })).toBe(scope === "name" ? 2 : 1);
+    const p2 = await prisma.programVersion.findUniqueOrThrow({ where: { id: programs[1]!.id } });
+    expect(listDocumentCourses(p2.programJson as unknown as ProgramDocument)[0]!.courseCode).toBe(scope === "all" ? targetCode : code);
+    expect(await prisma.courseResource.count({ where: { courseCode: otherCode } })).toBe(scope === "name" ? 0 : 1);
+  });
+  it("同方案同课号不同名称仅替换符合双重条件的节点，保留未匹配关系", async () => {
+    const { code, programs, input } = await fixture();
+    const targetCode = `${code}_TARGET`;
+    await prisma.course.create({ data: { code: targetCode, name: "目标", credits: 5 } });
+    await prisma.programVersion.update({ where: { id: programs[0]!.id }, data: { programJson: { moduleGroups: [{ name: "模块", courses: [
+      { courseCode: code, courseName: "旧名称", credits: 3, semesters: [] },
+      { courseCode: code, courseName: "保留名称", credits: 3, semesters: [] },
+    ] }] } } });
+    await apply({ ...input, sourceName: "旧名称", scope: "both", targetCode, existingAction: "replace" });
+    expect(await prisma.programCourse.count({ where: { programVersionId: programs[0]!.id } })).toBe(2);
+    const program = await prisma.programVersion.findUniqueOrThrow({ where: { id: programs[0]!.id } });
+    expect(listDocumentCourses(program.programJson as unknown as ProgramDocument).map(c => [c.courseCode, c.courseName])).toEqual([[targetCode, "目标"], [code, "保留名称"]]);
+  });
+  it("精确课号查询返回目标信息，目标在预览后改变时阻止提交", async () => {
+    const { input } = await fixture();
+    await prisma.course.create({ data: { code: input.targetCode, name: "已有课程", credits: 4 } });
+    const response = await GET(createRequest(`/api/admin/course-corrections?exactCode=${input.targetCode}`, { token }));
+    expect((await response.json()).data.course).toMatchObject({ code: input.targetCode, name: "已有课程", credits: 4 });
+    const preview = await correctCourse({ ...input, existingAction: "replace" }, userId);
+    await prisma.course.update({ where: { code: input.targetCode }, data: { credits: 5 } });
+    await expect(correctCourse({ ...input, existingAction: "replace", action: "apply", fingerprint: preview.fingerprint }, userId)).rejects.toThrow("已变化");
+  });
   it("独立课程复制所有非资源关联并将编辑后的信息同步到课程库", async () => {
     const { code, input, programs } = await fixture();
     const other = `${code}_OTHER`;

@@ -30,11 +30,19 @@ export function listDocumentCourses(document: ProgramDocument | null): CourseOcc
   return result;
 }
 
-export function correctDocumentCourse(document: ProgramDocument, sourceCode: string, code: string, name: string, credits?: number): ProgramDocument {
+export type CourseMatchScope = "selected" | "all" | "name" | "both";
+
+export function matchesCourse(course: { courseCode: string; courseName: string }, sourceCode: string, sourceName: string, scope: CourseMatchScope): boolean {
+  if (scope === "name") return course.courseName === sourceName;
+  if (scope === "both") return course.courseCode === sourceCode && course.courseName === sourceName;
+  return course.courseCode === sourceCode;
+}
+
+export function correctDocumentCourse(document: ProgramDocument, sourceCode: string, code: string, name: string, credits?: number, sourceName = "", scope: CourseMatchScope = "all"): ProgramDocument {
   const result = structuredClone(document);
   function correct(courses: ModuleCourse[] = []) {
     for (const course of courses) {
-      if (course.courseCode === sourceCode) {
+      if (matchesCourse(course, sourceCode, sourceName, scope)) {
         course.courseCode = code;
         course.courseName = name;
         if (credits !== undefined) course.credits = credits;
